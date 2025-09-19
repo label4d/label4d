@@ -1,0 +1,28 @@
+{
+  "name": "@labelfaster/core",
+  "version": "0.1.0",
+  "description": "Core annotation engine for Labelfaster",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "mitt": "^3.0.1",
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "eslint": "^8.56.0",
+    "tsup": "^6.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^0.34.6"
+  }
+}
