@@ -77,7 +77,8 @@ export function TopDownViewport({ referenceImage }: TopDownViewportProps): JSX.E
     const previewMaterial = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 1, gapSize: 0.5 });
     const previewGeometry = new THREE.BufferGeometry();
     const previewLine = new THREE.Line(previewGeometry, previewMaterial);
-    previewLine.computeLineDistances();
+    // Only compute line distances when we have at least 2 points; initial geometry is empty
+    // so we defer computeLineDistances() until vertices are provided in updatePreviewGeometry.
     previewLineRef.current = previewLine;
     scene.add(previewLine);
 
@@ -346,7 +347,11 @@ export function TopDownViewport({ referenceImage }: TopDownViewportProps): JSX.E
       geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
     }
     previewLine.geometry = geometry;
-    previewLine.computeLineDistances();
+    // Only compute line distances when there are at least 2 vertices
+    const posAttr = geometry.getAttribute('position');
+    if (posAttr && posAttr.count >= 2) {
+      previewLine.computeLineDistances();
+    }
     previewLine.visible = positionArray.length > 0;
   };
 
