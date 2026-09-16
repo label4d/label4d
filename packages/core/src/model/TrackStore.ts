@@ -1,0 +1,457 @@
+import { EventEmitter } from '../events/EventEmitter';
+import { lerp, lerpYaw } from '../geometry/math';
+import type { Vec3 } from '../geometry/math';
+import type {
+  GeometryId,
+  GeometryMeta,
+  KeyframeData,
+  KeyframeState,
+  ResolvedState,
+  SerializedGeometry,
+  SerializedKeyframes,
+  SerializedTrack,
+  TrackId,
+  TrackMeta,
+} from './types';
+
+export interface TrackRecord {
+  meta: TrackMeta;
+  kf: KeyframeData;
+  /** sparse per-frame attribute overrides keyed by frame */
+  frameAttrs: Map<number, Record<string, string | number | boolean>>;
+}
+
+export interface GeometryRecord {
+  meta: GeometryMeta;
+  vertices: Float32Array; // xyz triplets
+}
+
+export interface StoreChange {
+  version: number;
+  /** null = structural change affecting everything */
+  tracks: Set<TrackId> | null;
+  geometries: Set<GeometryId> | null;
+}
+
+export interface TrackStoreEvents {
+  changed: StoreChange;
+}
+
+const emptyKeyframes = (): KeyframeData => ({
+  frames: new Int32Array(0),
+  pos: new Float32Array(0),
+  yaw: new Float32Array(0),
+  size: new Float32Array(0),
+});
+
+function keyframesFromSerialized(s: SerializedKeyframes | undefined): KeyframeData {
+  if (!s || s.frames.length === 0) return emptyKeyframes();
+  const k = s.frames.length;
+  const frames = new Int32Array(k);
+  const pos = new Float32Array(k * 3);
+  const yaw = new Float32Array(k);
+  const size = new Float32Array(k * 3);
+  // insertion sort by frame (inputs are usually already sorted)
+  const order = Array.from({ length: k }, (_, i) => i);
+  order.sort((a, b) => s.frames[a] - s.frames[b]);
+  for (let out = 0; out < k; out++) {
+    const src = order[out];
+    frames[out] = s.frames[src];
+    pos[out * 3] = s.pos[src * 3];
+    pos[out * 3 + 1] = s.pos[src * 3 + 1];
+    pos[out * 3 + 2] = s.pos[src * 3 + 2];
+    yaw[out] = s.yaw[src];
+    size[out * 3] = s.size[src * 3];
+    size[out * 3 + 1] = s.size[src * 3 + 1];
+    size[out * 3 + 2] = s.size[src * 3 + 2];
+  }
+  return { frames, pos, yaw, size };
+}
+
+function insertIntoColumns(
+  kf: KeyframeData,
+  frame: number,
+  state: KeyframeState
+): KeyframeData {
+  const k = kf.frames.length;
+  let idx = 0;
+  while (idx < k && kf.frames[idx] < frame) idx++;
+  const frames = new Int32Array(k + 1);
+  const pos = new Float32Array((k + 1) * 3);
+  const yaw = new Float32Array(k + 1);
+  const size = new Float32Array((k + 1) * 3);
+  frames.set(kf.frames.subarray(0, idx), 0);
+  pos.set(kf.pos.subarray(0, idx * 3), 0);
+  yaw.set(kf.yaw.subarray(0, idx), 0);
+  size.set(kf.size.subarray(0, idx * 3), 0);
+  frames[idx] = frame;
+  pos[idx * 3] = state.pos.x;
+  pos[idx * 3 + 1] = state.pos.y;
+  pos[idx * 3 + 2] = state.pos.z;
+  yaw[idx] = state.yaw;
+  size[idx * 3] = state.size.x;
+  size[idx * 3 + 1] = state.size.y;
+  size[idx * 3 + 2] = state.size.z;
+  frames.set(kf.frames.subarray(idx), idx + 1);
+  pos.set(kf.pos.subarray(idx * 3), (idx + 1) * 3);
+  yaw.set(kf.yaw.subarray(idx), idx + 1);
+  size.set(kf.size.subarray(idx * 3), (idx + 1) * 3);
+  return { frames, pos, yaw, size };
+}
+
+function removeFromColumns(kf: KeyframeData, index: number): KeyframeData {
+  const k = kf.frames.length;
+  const frames = new Int32Array(k - 1);
+  const pos = new Float32Array((k - 1) * 3);
+  const yaw = new Float32Array(k - 1);
+  const size = new Float32Array((k - 1) * 3);
+  frames.set(kf.frames.subarray(0, index), 0);
+  frames.set(kf.frames.subarray(index + 1), index);
+  pos.set(kf.pos.subarray(0, index * 3), 0);
+  pos.set(kf.pos.subarray((index + 1) * 3), index * 3);
+  yaw.set(kf.yaw.subarray(0, index), 0);
+  yaw.set(kf.yaw.subarray(index + 1), index);
+  size.set(kf.size.subarray(0, index * 3), 0);
+  size.set(kf.size.subarray((index + 1) * 3), index * 3);
+  return { frames, pos, yaw, size };
+}
+
+function stateAt(kf: KeyframeData, i: number): KeyframeState {
+  return {
+    pos: { x: kf.pos[i * 3], y: kf.pos[i * 3 + 1], z: kf.pos[i * 3 + 2] },
+    yaw: kf.yaw[i],
+    size: { x: kf.size[i * 3], y: kf.size[i * 3 + 1], z: kf.size[i * 3 + 2] },
+  };
+}
+
+/**
+ * The 4D document: tracked dynamic objects (keyframe columns with interval
+ * index) plus static sequence-wide geometry. All mutators are raw — commands
+ * in ../command wrap them into undoable units and own ID allocation.
+ */
+export class TrackStore {
+  readonly events = new EventEmitter<TrackStoreEvents>();
+
+  private version = 0;
+  private trackMap = new Map<TrackId, TrackRecord>();
+  private trackOrder: TrackId[] = [];
+  private geometryMap = new Map<GeometryId, GeometryRecord>();
+  private geometryOrder: GeometryId[] = [];
+  private intervalIndex: { ids: TrackId[]; starts: Int32Array } | null = null;
+  private trackCounter = 0;
+  private geometryCounter = 0;
+
+  get currentVersion(): number {
+    return this.version;
+  }
+
+  nextTrackId(): TrackId {
+    this.trackCounter++;
+    return `trk_${String(this.trackCounter).padStart(6, '0')}`;
+  }
+
+  nextGeometryId(): GeometryId {
+    this.geometryCounter++;
+    return `geo_${String(this.geometryCounter).padStart(6, '0')}`;
+  }
+
+  private touch(tracks?: Set<TrackId> | null, geometries?: Set<GeometryId> | null): void {
+    this.version++;
+    if (tracks === null || tracks === undefined) this.intervalIndex = null;
+    else if (tracks.size > 0) this.intervalIndex = null;
+    this.events.emit('changed', {
+      version: this.version,
+      tracks: tracks ?? null,
+      geometries: geometries ?? null,
+    });
+  }
+
+  // ---- tracks ----
+
+  addTrack(
+    meta: TrackMeta,
+    keyframes?: SerializedKeyframes,
+    frameAttributes?: Array<{ frame: number; attrs: Record<string, string | number | boolean> }>
+  ): TrackRecord {
+    const frameAttrs = new Map<number, Record<string, string | number | boolean>>();
+    for (const entry of frameAttributes ?? []) frameAttrs.set(entry.frame, { ...entry.attrs });
+    const record: TrackRecord = { meta, kf: keyframesFromSerialized(keyframes), frameAttrs };
+    this.trackMap.set(meta.id, record);
+    if (!this.trackOrder.includes(meta.id)) this.trackOrder.push(meta.id);
+    this.touch(null);
+    return record;
+  }
+
+  getTrack(id: TrackId): TrackRecord | undefined {
+    return this.trackMap.get(id);
+  }
+
+  listTracks(): readonly TrackRecord[] {
+    return this.trackOrder
+      .map((id) => this.trackMap.get(id))
+      .filter((r): r is TrackRecord => !!r);
+  }
+
+  get trackCount(): number {
+    return this.trackMap.size;
+  }
+
+  deleteTrack(id: TrackId): TrackRecord | undefined {
+    const record = this.trackMap.get(id);
+    if (!record) return undefined;
+    this.trackMap.delete(id);
+    this.trackOrder = this.trackOrder.filter((t) => t !== id);
+    this.touch(null);
+    return record;
+  }
+
+  setTrackMeta(id: TrackId, patch: Partial<Omit<TrackMeta, 'id'>>): void {
+    const record = this.trackMap.get(id);
+    if (!record) return;
+    Object.assign(record.meta, patch);
+    this.touch(new Set([id]));
+  }
+
+  /** Track existence interval = union of meta range and keyframe range. */
+  setTrackInterval(id: TrackId, startFrame: number, endFrame: number): void {
+    this.setTrackMeta(id, { startFrame, endFrame });
+  }
+
+  setKeyframe(id: TrackId, frame: number, state: KeyframeState): void {
+    const record = this.trackMap.get(id);
+    if (!record) return;
+    const existing = record.kf.frames.indexOf(frame);
+    if (existing >= 0) {
+      record.kf = insertIntoColumns(removeFromColumns(record.kf, existing), frame, state);
+    } else {
+      record.kf = insertIntoColumns(record.kf, frame, state);
+    }
+    // keyframes may extend outside meta interval; widen to keep invariant
+    if (frame < record.meta.startFrame) record.meta.startFrame = frame;
+    if (frame > record.meta.endFrame) record.meta.endFrame = frame;
+    this.touch(new Set([id]));
+  }
+
+  removeKeyframe(id: TrackId, frame: number): KeyframeState | null {
+    const record = this.trackMap.get(id);
+    if (!record) return null;
+    const idx = record.kf.frames.indexOf(frame);
+    if (idx < 0) return null;
+    const removed = stateAt(record.kf, idx);
+    record.kf = removeFromColumns(record.kf, idx);
+    this.touch(new Set([id]));
+    return removed;
+  }
+
+  getKeyframes(id: TrackId): KeyframeData | undefined {
+    return this.trackMap.get(id)?.kf;
+  }
+
+  resolveState(id: TrackId, frame: number): ResolvedState | null {
+    const record = this.trackMap.get(id);
+    if (!record) return null;
+    const { meta, kf } = record;
+    if (frame < meta.startFrame || frame > meta.endFrame || kf.frames.length === 0) return null;
+
+    const frames = kf.frames;
+    const k = frames.length;
+    let lo = 0;
+    let hi = k - 1;
+    let idx = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (frames[mid] === frame) {
+        idx = mid;
+        break;
+      }
+      if (frames[mid] < frame) lo = mid + 1;
+      else hi = mid - 1;
+    }
+    if (idx >= 0) {
+      const s = stateAt(kf, idx);
+      return { ...s, atKeyframe: true };
+    }
+    // insertion point = lo (first frame greater than query)
+    if (lo <= 0) {
+      const s = stateAt(kf, 0);
+      return { ...s, atKeyframe: false };
+    }
+    if (lo >= k) {
+      const s = stateAt(kf, k - 1);
+      return { ...s, atKeyframe: false };
+    }
+    if (meta.interpolation === 'hold') {
+      const s = stateAt(kf, lo - 1);
+      return { ...s, atKeyframe: false };
+    }
+    const a = stateAt(kf, lo - 1);
+    const b = stateAt(kf, lo);
+    const t = (frame - frames[lo - 1]) / (frames[lo] - frames[lo - 1]);
+    return {
+      pos: {
+        x: lerp(a.pos.x, b.pos.x, t),
+        y: lerp(a.pos.y, b.pos.y, t),
+        z: lerp(a.pos.z, b.pos.z, t),
+      },
+      yaw: lerpYaw(a.yaw, b.yaw, t),
+      size: {
+        x: lerp(a.size.x, b.size.x, t),
+        y: lerp(a.size.y, b.size.y, t),
+        z: lerp(a.size.z, b.size.z, t),
+      },
+      atKeyframe: false,
+    };
+  }
+
+  activeTrackIds(frame: number): TrackId[] {
+    if (this.intervalIndex === null) this.rebuildIntervalIndex();
+    const index = this.intervalIndex;
+    if (!index) return [];
+    const out: TrackId[] = [];
+    // starts is sorted; scan while start <= frame
+    for (let i = 0; i < index.starts.length; i++) {
+      if (index.starts[i] > frame) break;
+      const id = index.ids[i];
+      const rec = this.trackMap.get(id);
+      if (rec && rec.meta.endFrame >= frame && rec.kf.frames.length > 0) out.push(id);
+    }
+    return out;
+  }
+
+  private rebuildIntervalIndex(): void {
+    const entries = this.listTracks()
+      .filter((r) => r.kf.frames.length > 0)
+      .sort((a, b) => a.meta.startFrame - b.meta.startFrame);
+    const starts = new Int32Array(entries.length);
+    entries.forEach((r, i) => (starts[i] = r.meta.startFrame));
+    this.intervalIndex = { ids: entries.map((r) => r.meta.id), starts };
+  }
+
+  setFrameAttribute(
+    id: TrackId,
+    frame: number,
+    key: string,
+    value: string | number | boolean | null
+  ): void {
+    const record = this.trackMap.get(id);
+    if (!record) return;
+    let attrs = record.frameAttrs.get(frame);
+    if (value === null) {
+      if (attrs) {
+        delete attrs[key];
+        if (Object.keys(attrs).length === 0) record.frameAttrs.delete(frame);
+      }
+    } else {
+      if (!attrs) {
+        attrs = {};
+        record.frameAttrs.set(frame, attrs);
+      }
+      attrs[key] = value;
+    }
+    this.touch(new Set([id]));
+  }
+
+  getFrameAttributes(id: TrackId, frame: number): Record<string, string | number | boolean> | undefined {
+    return this.trackMap.get(id)?.frameAttrs.get(frame);
+  }
+
+  serializeTrack(id: TrackId): SerializedTrack | null {
+    const record = this.trackMap.get(id);
+    if (!record) return null;
+    const frameAttributes: NonNullable<SerializedTrack['frameAttributes']> = [];
+    for (const [frame, attrs] of record.frameAttrs) {
+      if (Object.keys(attrs).length > 0) frameAttributes.push({ frame, attrs: { ...attrs } });
+    }
+    return {
+      meta: { ...record.meta, attributes: { ...record.meta.attributes } },
+      keyframes: {
+        frames: Array.from(record.kf.frames),
+        pos: Array.from(record.kf.pos),
+        yaw: Array.from(record.kf.yaw),
+        size: Array.from(record.kf.size),
+      },
+      frameAttributes: frameAttributes.length > 0 ? frameAttributes : undefined,
+    };
+  }
+
+  restoreTrack(serialized: SerializedTrack): void {
+    this.addTrack(
+      { ...serialized.meta, attributes: { ...serialized.meta.attributes } },
+      serialized.keyframes,
+      serialized.frameAttributes
+    );
+  }
+
+  // ---- static geometry ----
+
+  addGeometry(meta: GeometryMeta, vertices: number[] | Float32Array): GeometryRecord {
+    const record: GeometryRecord = {
+      meta,
+      vertices: vertices instanceof Float32Array ? vertices : Float32Array.from(vertices),
+    };
+    this.geometryMap.set(meta.id, record);
+    this.geometryOrder.push(meta.id);
+    this.touch(undefined, null);
+    return record;
+  }
+
+  getGeometry(id: GeometryId): GeometryRecord | undefined {
+    return this.geometryMap.get(id);
+  }
+
+  listGeometries(): readonly GeometryRecord[] {
+    return this.geometryOrder
+      .map((id) => this.geometryMap.get(id))
+      .filter((r): r is GeometryRecord => !!r);
+  }
+
+  get geometryCount(): number {
+    return this.geometryMap.size;
+  }
+
+  geometriesAt(frame: number): GeometryRecord[] {
+    return this.listGeometries().filter(
+      (r) => frame >= r.meta.startFrame && frame <= r.meta.endFrame
+    );
+  }
+
+  setGeometryVertices(id: GeometryId, vertices: number[] | Float32Array): void {
+    const record = this.geometryMap.get(id);
+    if (!record) return;
+    record.vertices =
+      vertices instanceof Float32Array ? vertices : Float32Array.from(vertices);
+    this.touch(undefined, new Set([id]));
+  }
+
+  setGeometryMeta(id: GeometryId, patch: Partial<Omit<GeometryMeta, 'id'>>): void {
+    const record = this.geometryMap.get(id);
+    if (!record) return;
+    Object.assign(record.meta, patch);
+    this.touch(undefined, new Set([id]));
+  }
+
+  deleteGeometry(id: GeometryId): GeometryRecord | undefined {
+    const record = this.geometryMap.get(id);
+    if (!record) return undefined;
+    this.geometryMap.delete(id);
+    this.geometryOrder = this.geometryOrder.filter((g) => g !== id);
+    this.touch(undefined, null);
+    return record;
+  }
+
+  serializeGeometry(id: GeometryId): SerializedGeometry | null {
+    const record = this.geometryMap.get(id);
+    if (!record) return null;
+    return {
+      meta: { ...record.meta, attributes: { ...record.meta.attributes } },
+      vertices: Array.from(record.vertices),
+    };
+  }
+
+  restoreGeometry(serialized: SerializedGeometry): void {
+    this.addGeometry(
+      { ...serialized.meta, attributes: { ...serialized.meta.attributes } },
+      serialized.vertices
+    );
+  }
+}
