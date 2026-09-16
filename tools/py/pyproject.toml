@@ -3,7 +3,10 @@ name = "labelfaster-tools"
 version = "0.1.0"
 description = "Labelfaster offline data tooling (point cloud stitching, fixtures)"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.26"]
+dependencies = [
+    "numpy>=1.26",
+    "pillow>=12.3.0",
+]
 
 [tool.uv]
 package = false

@@ -46,6 +46,28 @@ export interface HeightSource {
   tileset?: TilesetConfig;
 }
 
+export interface BevImageConfig {
+  url: string;
+  originX: number;
+  originZ: number;
+  metersPerPixel: number;
+  width: number;
+  height: number;
+}
+
+export interface HeightSource {
+  /** 单张固定尺寸图片（BEV 底图 / 高度图模式），配合 extent 字段 */
+  url?: string;
+  /** 图片覆盖范围（世界坐标） */
+  originX?: number;
+  originZ?: number;
+  metersPerPixel?: number;
+  width?: number;
+  height?: number;
+  /** 瓦片金字塔模式 */
+  tileset?: TilesetConfig;
+}
+
 export interface SequenceManifest {
   formatVersion: 1;
   id: string;
@@ -54,7 +76,7 @@ export interface SequenceManifest {
   /** inline n x 16 (ego -> world, column-major) or URL to a JSON file of the same shape */
   egoPoses?: string | number[][];
   pointCloud?: PointCloudSource;
-  bev?: { tileset: TilesetConfig };
+  bev?: { tileset?: TilesetConfig; image?: BevImageConfig };
   height?: HeightSource;
   cameras?: CameraConfig[];
   potree?: { url: string };

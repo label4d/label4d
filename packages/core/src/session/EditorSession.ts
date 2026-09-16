@@ -38,7 +38,7 @@ import type { LazDecoder, NetClient } from '../stream/PotreeOverlay';
 import { parsePcd } from '../io/pcd';
 import type { PointCloudFrame } from '../io/pcd';
 import { substituteFrame } from '../io/manifest';
-import type { SequenceManifest } from '../io/manifest';
+import type { SequenceManifest, TilesetConfig } from '../io/manifest';
 import { applySnapshot, serializeStore } from '../io/snapshot';
 import type { SnapshotDocument, SnapshotQA } from '../io/snapshot';
 import { exportNuScenesAnnotations } from '../io/formats';
@@ -267,14 +267,27 @@ export class EditorSession {
       this.imageFrames = null;
     }
 
-    if (manifest.bev) {
+    if (manifest.bev?.tileset) {
       this.bevPyramid = new BevPyramid(manifest.bev.tileset);
     } else {
       this.bevPyramid = null;
     }
 
     if (manifest.height) {
-      const config = manifest.height.tileset ?? defaultHeightExtent(manifest);
+      // 单图模式: height.url + extent；瓦片模式: height.tileset
+      const h = manifest.height;
+      let config: TilesetConfig | undefined = h.tileset;
+      if (!config && h.url && h.width && h.height) {
+        config = {
+          originX: h.originX ?? 0,
+          originZ: h.originZ ?? 0,
+          metersPerPixel: h.metersPerPixel ?? 1,
+          width: h.width,
+          height: h.height,
+          tileSize: Math.max(h.width, h.height),
+          urlTemplate: h.url,
+        };
+      }
       if (config) {
         this.heightField = new HeightField(
           config,
