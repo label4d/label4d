@@ -11,6 +11,8 @@ export interface FrameBufferOptions {
   windowAhead?: number;
   windowBehind?: number;
   budgetBytes?: number;
+  /** scheduler request-id namespace; must be unique per buffer (pcd/image/...) */
+  idPrefix?: string;
 }
 
 export interface FrameBufferStats {
@@ -45,6 +47,7 @@ export class FrameBuffer<T> {
   private readonly ahead: number;
   private readonly behind: number;
   private readonly budget: number;
+  private readonly idPrefix: string;
 
   constructor(
     private readonly provider: FrameProvider<T>,
@@ -54,6 +57,7 @@ export class FrameBuffer<T> {
     this.ahead = Math.max(0, options.windowAhead ?? 45);
     this.behind = Math.max(0, options.windowBehind ?? 45);
     this.budget = options.budgetBytes ?? 512 * 1024 * 1024;
+    this.idPrefix = options.idPrefix ?? 'frame';
   }
 
   setFrame(frame: number): void {
@@ -131,7 +135,7 @@ export class FrameBuffer<T> {
   }
 
   private frameId(frame: number): string {
-    return `frame:${frame}`;
+    return `${this.idPrefix}:${frame}`;
   }
 
   private prefetch(): void {

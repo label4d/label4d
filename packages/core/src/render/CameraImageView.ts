@@ -97,7 +97,6 @@ export class CameraImageView {
   private imageMesh: THREE.Mesh | null = null;
   private cloudPoints: THREE.Points | null = null;
   private cloudMaterial: THREE.PointsMaterial | null = null;
-
   private readonly hullLines: DynamicLines;
   private readonly hullBuf: Float32Array;
   private readonly hullColors: Float32Array;
@@ -120,6 +119,7 @@ export class CameraImageView {
   labelScale = 0.5; // screen px per label-texture px
 
   constructor(private readonly labelDefs: LabelDef[]) {
+    this.scene.background = new THREE.Color(0x223344);
     this.hullBuf = new Float32Array(65536 * 3);
     this.hullColors = new Float32Array(65536 * 3);
     this.wireBuf = new Float32Array(131072 * 3);
@@ -194,7 +194,7 @@ export class CameraImageView {
     texture.needsUpdate = true; // required: manual Texture starts at version 0
     // plane in pixel space; flipY'd decode puts PNG top row at +Y (top)
     const geometry = new THREE.PlaneGeometry(config.width, config.height);
-    const material = new THREE.MeshBasicMaterial({ map: texture });
+    const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
     this.imageMesh = new THREE.Mesh(geometry, material);
     this.imageMesh.position.set(config.width / 2, config.height / 2, -1);
     this.imageMesh.renderOrder = -10;

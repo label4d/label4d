@@ -245,6 +245,7 @@ export class EditorSession {
           windowAhead: this.deps.pointCloudWindow?.ahead ?? 45,
           windowBehind: this.deps.pointCloudWindow?.behind ?? 45,
           budgetBytes: this.deps.pointCloudWindow?.budgetBytes ?? 512 * 1024 * 1024,
+          idPrefix: 'pcd',
         }
       );
     } else {
@@ -260,7 +261,7 @@ export class EditorSession {
           dispose: () => undefined,
         },
         this.scheduler,
-        { windowAhead: 4, windowBehind: 2, budgetBytes: 256 * 1024 * 1024 }
+        { windowAhead: 4, windowBehind: 2, budgetBytes: 256 * 1024 * 1024, idPrefix: 'img' }
       );
     } else {
       this.imageFrames = null;

@@ -23,6 +23,7 @@ export function CameraView() {
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     const view = new CameraImageView(session.labels);
+    (window as unknown as { __lfCam?: unknown }).__lfCam = view;
 
     let currentProjectorId: string | null = null;
     let currentImage: unknown = null;
@@ -81,11 +82,23 @@ export function CameraView() {
     window.addEventListener('lf:cloudproj', onCloudProj);
 
     let rafId = 0;
+    const ticks = { n: 0, wanted: null as string | null };
+    (window as unknown as { __lfCamTicks?: typeof ticks }).__lfCamTicks = ticks;
+    const wanted = () => cameraId ?? session.activeCameraId ?? [...session.projectors.keys()][0] ?? null;
     const renderLoop = () => {
-      const cameras = [...session.projectors.keys()];
-      const wanted = cameraId ?? session.activeCameraId ?? cameras[0] ?? null;
-      if (wanted && wanted !== currentProjectorId) {
-        const projector = session.projectors.get(wanted);
+      try {
+        runFrame();
+      } catch (error) {
+        (ticks as { err?: string }).err = String(error);
+        return;
+      }
+      rafId = requestAnimationFrame(renderLoop);
+    };
+    const runFrame = () => {
+      ticks.n++;
+      ticks.wanted = wanted();
+      if (wanted() && wanted() !== currentProjectorId) {
+        const projector = session.projectors.get(wanted() as string);
         if (projector) {
           view.attachProjector(projector);
           view.camera.userData.config = projector.config;
@@ -109,7 +122,6 @@ export function CameraView() {
         view.syncFrame(frame, session.store, session.selection, session.currentPointCloud(), session.hover);
         view.render(renderer);
       }
-      rafId = requestAnimationFrame(renderLoop);
     };
     renderLoop();
 
