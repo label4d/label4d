@@ -112,6 +112,11 @@ export class CameraImageView {
   private readonly labelSprites = new Map<string, PixelLabel>();
   private hulls: HullEntry[] = [];
   private projector: CameraProjector | null = null;
+
+  /** 是否已绑定投影器（供宿主组件判断渲染就绪） */
+  get hasProjector(): boolean {
+    return this.projector !== null;
+  }
   private options: CameraViewOptions = { showAll: false, cloudProjection: true, minSupportPoints: 20 };
   private readonly geomLines: DynamicLines;
   private readonly geomBuf: Float32Array;
@@ -171,10 +176,54 @@ export class CameraImageView {
   attachProjector(projector: CameraProjector): void {
     this.projector = projector;
     const { width, height } = projector.config;
-    this.camera.left = 0;
-    this.camera.right = width;
-    this.camera.top = height;
-    this.camera.bottom = 0;
+    this.viewCx = width / 2;
+    this.viewCy = height / 2;
+    this.viewScale = 1;
+    this.applyCamera();
+  }
+
+  /** 视口控制：center 为 GL 像素坐标（y 向上），scale=1 显示整幅图像 */
+  setView(centerX: number, centerY: number, scale: number): void {
+    this.viewCx = centerX;
+    this.viewCy = centerY;
+    this.viewScale = Math.max(1, Math.min(40, scale));
+    this.applyCamera();
+  }
+
+  zoomAtCursor = this.zoomAt;
+  panByPixels = this.panBy;
+
+  zoomAt(pxGl: number, pyGl: number, factor: number): void {
+    const newScale = Math.max(1, Math.min(40, this.viewScale * factor));
+    const applied = newScale / this.viewScale;
+    // 不动点：光标下的图像点缩放后仍位于光标处
+    this.viewCx = pxGl + (this.viewCx - pxGl) / applied;
+    this.viewCy = pyGl + (this.viewCy - pyGl) / applied;
+    this.viewScale = newScale;
+    this.applyCamera();
+  }
+
+  panBy(dx: number, dy: number): void {
+    this.setView(this.viewCx - dx, this.viewCy - dy, this.viewScale);
+  }
+
+  get viewScaleValue(): number {
+    return this.viewScale;
+  }
+
+  private viewCx = 0;
+  private viewCy = 0;
+  private viewScale = 1;
+
+  private applyCamera(): void {
+    const config = this.projector?.config;
+    if (!config) return;
+    const halfW = config.width / 2 / this.viewScale;
+    const halfH = config.height / 2 / this.viewScale;
+    this.camera.left = this.viewCx - halfW;
+    this.camera.right = this.viewCx + halfW;
+    this.camera.top = this.viewCy + halfH;
+    this.camera.bottom = this.viewCy - halfH;
     this.camera.updateProjectionMatrix();
   }
 
@@ -404,7 +453,7 @@ export class CameraImageView {
   // ---- internals ----
 
   /** 框内点云支撑计数（stride 采样估计全量密度）。 */
-  private countBoxSupport(cloud: PointCloudFrame, pos: { x: number; y: number; z: number }, yaw: number, size: { x: number; y: number; z: number }): number {
+  private countBoxSupport(cloud: PointCloudFrame | null, pos: { x: number; y: number; z: number }, yaw: number, size: { x: number; y: number; z: number }): number {
     if (!cloud || cloud.count === 0) return 0;
     const c = Math.cos(yaw), s = Math.sin(yaw);
     const hl = size.x / 2 + 0.1, hw = size.z / 2 + 0.1;

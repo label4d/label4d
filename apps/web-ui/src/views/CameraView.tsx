@@ -76,6 +76,32 @@ export function CameraView({ index = 0 }: { index?: number }) {
     canvas.addEventListener('pointerdown', onDown);
     canvas.addEventListener('pointerup', onUp);
 
+    // 视图平移/缩放：滚轮缩放（光标为中心），左键拖动平移
+    let panLast: { x: number; y: number } | null = null;
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.button === 0) { panLast = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); }
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!panLast || !view.hasProjector) return;
+      const rect = canvas.getBoundingClientRect();
+      const config = (view.camera.userData as { config?: { width: number; height: number } }).config;
+      if (!config) return;
+      const k = config.width / rect.width;
+      view.panByPixels(-(e.clientX - panLast.x) * k, (e.clientY - panLast.y) * k);
+      panLast = { x: e.clientX, y: e.clientY };
+    });
+    canvas.addEventListener('pointerup', () => { panLast = null; });
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const config = (view.camera.userData as { config?: { width: number; height: number } }).config;
+      if (!config) return;
+      const imgX = ((e.clientX - rect.left) / rect.width) * config.width;
+      const imgYGl = config.height - ((e.clientY - rect.top) / rect.height) * config.height;
+      view.zoomAtCursor(imgX, imgYGl, Math.exp(-e.deltaY * 0.0015));
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+
     const onBadgeToggle = (e: Event) => view.setOptions({ showAll: Boolean((e as CustomEvent).detail) });
     window.addEventListener('lf:badges', onBadgeToggle);
     const onCloudProj = (e: Event) => view.setOptions({ cloudProjection: Boolean((e as CustomEvent).detail) });
