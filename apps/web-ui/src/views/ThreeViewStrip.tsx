@@ -79,13 +79,18 @@ export function ThreeViewStrip() {
     const renderLoop = () => {
       const frame = session.frame;
       const cloud = session.currentPointCloud();
-      // the strip has no user zoom: keep panels centered on the ego vehicle
+      // 选中对象时三视图聚焦该对象；未选中时跟随自车
+      const focusId = session.selection.first;
+      const focusState = focusId ? session.store.resolveState(focusId, frame) : null;
+      const center = focusState ? focusState.pos : session.ego.positionAt(frame);
+      const half = focusState ? 12 : 45;
       panels.forEach((panel, index) => {
         const entry = refs.current[index];
         if (!entry) return;
-        panel.fit(session.ego.positionAt(frame), 45);
+        panel.fit(center, half);
+        const depthCenter = focusState ? panel.depthOf(center) : 0;
         if (cloud && (cloud !== lastCloud || frame !== lastCloudFrame || index === 0)) {
-          panel.setCloud(cloud, -depthHalfWindow(), depthHalfWindow());
+          panel.setCloud(cloud, depthCenter - depthHalfWindow(), depthCenter + depthHalfWindow());
         }
         panel.syncFrame(frame, session.store, session.selection);
         const panelRenderer = renderers[index];
