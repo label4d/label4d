@@ -163,10 +163,3 @@ export function applySnapshot(store: TrackStore, doc: SnapshotDocument): void {
   for (const g of doc.geometries) store.restoreGeometry(g);
 }
 
-export function countSnapshotStats(doc: SnapshotDocument): { tracks: number; keyframes: number; geometries: number } {
-  return {
-    tracks: doc.tracks.length,
-    keyframes: doc.tracks.reduce((sum, t) => sum + t.kf.count, 0),
-    geometries: doc.geometries.length,
-  };
-}

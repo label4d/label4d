@@ -67,31 +67,6 @@ export function colorForLabel(labels: LabelDef[], label: string): string {
   return `hsl(${hue}, 70%, 60%)`;
 }
 
-export function colorForLabelInt(labels: LabelDef[], label: string): THREE.Color {
-  const css = colorForLabel(labels, label);
-  return new THREE.Color(css);
-}
-
-/** Deep-dispose a subtree: geometries, materials, textures. */
-export function disposeObject(root: THREE.Object3D): void {
-  root.traverse((obj) => {
-    const mesh = obj as THREE.Mesh & { material?: THREE.Material | THREE.Material[] };
-    if (mesh.geometry) mesh.geometry.dispose();
-    const material = mesh.material;
-    if (Array.isArray(material)) {
-      for (const m of material) disposeMaterial(m);
-    } else if (material) {
-      disposeMaterial(material);
-    }
-  });
-}
-
-function disposeMaterial(material: THREE.Material): void {
-  const anyMat = material as THREE.Material & { map?: THREE.Texture | null };
-  if (anyMat.map) anyMat.map.dispose();
-  material.dispose();
-}
-
 export interface DynamicLines {
   object: THREE.LineSegments;
   /** write segments: flat xyz pairs of endpoints; vertexCount = 2 * segments * 3 */

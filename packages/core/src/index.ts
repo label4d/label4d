@@ -1,12 +1,12 @@
 // events / entity
 export { EventEmitter } from './events/EventEmitter';
-export { EntityStore } from './entity/EntityStore';
 
 // geometry
 export {
-  vec3, clamp, lerp, normalizeYaw, lerpYaw, yawQuaternion,
+  vec3, clamp, lerp, normalizeYaw, lerpYaw,
   composeBoxMatrix, boxCorners, mat4Multiply, mat4Invert, transformPoint,
-  rayGround, rayOBB, pointInPolygon, convexHull, bilinear, pointSegmentDistance,
+  rayGround, rayOBB, pointInPolygon, convexHull, bilinear,
+  pointSegmentDistance,
 } from './geometry/math';
 export type { Vec3 } from './geometry/math';
 
@@ -44,7 +44,7 @@ export type {
   TilesetConfig, HeightSource,
 } from './io/manifest';
 export {
-  serializeStore, applySnapshot, countSnapshotStats,
+  serializeStore, applySnapshot,
   bytesToBase64, base64ToBytes,
 } from './io/snapshot';
 export type { SnapshotDocument, SnapshotTrack, SnapshotQA } from './io/snapshot';
@@ -103,7 +103,7 @@ export type { CameraPickResult, CameraViewOptions } from './render/CameraImageVi
 export { ThreeViewPanel } from './render/ThreeViewPanel';
 export type { ThreeViewAxis, ViewRect } from './render/ThreeViewPanel';
 export {
-  colorForLabel, makeDynamicLines, TextBadge, disposeObject, srgbToLinear,
+  colorForLabel, makeDynamicLines, TextBadge, srgbToLinear,
   rgbBytesToLinearColors, BOX_EDGES, paintBadge,
 } from './render/shared';
 export type { DynamicLines } from './render/shared';

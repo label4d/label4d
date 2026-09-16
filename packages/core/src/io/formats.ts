@@ -1,5 +1,4 @@
 import type { TrackStore } from '../model/TrackStore';
-import { parseEgoPoses } from './manifest';
 
 /**
  * Format converters. The native format is the snapshot document; this module
@@ -118,8 +117,4 @@ export function exportNuScenesAnnotations(
     instance,
     sample_annotation,
   };
-}
-
-export function loadEgoPosesFromJSON(json: unknown, frameCount: number): Float64Array | null {
-  return parseEgoPoses(json, frameCount);
 }
