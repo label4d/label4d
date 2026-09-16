@@ -1,33 +1,113 @@
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
-    --primary: 262.1 83.3% 57.8%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 14.3% 95.9%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
-  }
+/* ---- Design tokens ---- */
+:root {
+  /* surfaces */
+  --bg-root: #0b0e13;
+  --bg-panel: #0e1218;
+  --bg-surface: #141a24;
+  --bg-surface-hover: #1c2432;
+  --bg-surface-active: #243040;
+  --bg-inset: #10161f;
+  --border: #1d2530;
+  --border-strong: #2b3b52;
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-  }
+  /* text */
+  --text-primary: #e8eef7;
+  --text-secondary: #8496ab;
+  --text-muted: #5b6b7f;
+  --text-faint: #3a4a5f;
 
-  body {
-    margin: 0;
-    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  }
+  /* accent */
+  --accent: #2b6cff;
+  --accent-hover: #3d7bff;
+  --accent-text: #ffffff;
+
+  /* semantic */
+  --danger: #7a2430;
+  --danger-hover: #952c3c;
+  --success: #3ddc97;
+  --warning: #ffb84f;
+  --selection: #fff36b;
+
+  --radius: 6px;
+  --radius-lg: 8px;
+
+  color-scheme: dark;
 }
+
+/* ---- Base ---- */
+body {
+  margin: 0;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg-root);
+  color: var(--text-primary);
+}
+
+::selection { background: rgba(43, 108, 255, 0.35); color: #fff; }
+
+/* ---- Scrollbars ---- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #243040; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #2e3c50; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* ---- Focus ---- */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: var(--radius); }
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none; box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* ---- Component classes ---- */
+.btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: var(--radius);
+  font-size: 12px; line-height: 1.4; font-weight: 500;
+  background: var(--bg-surface); color: var(--text-secondary);
+  border: 1px solid transparent;
+  cursor: pointer; user-select: none;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+.btn:active { background: var(--bg-surface-active); }
+.btn:disabled { opacity: 0.35; cursor: default; }
+.btn-primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-danger { background: var(--danger); color: #fecdd3; }
+.btn-danger:hover { background: var(--danger-hover); }
+.btn-ghost { background: transparent; }
+.btn-ghost:hover { background: rgba(255,255,255,0.06); }
+
+.panel-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--text-muted);
+  padding: 6px 12px 2px;
+}
+
+.input-sm {
+  background: var(--bg-surface); border: 1px solid transparent; border-radius: var(--radius);
+  font-size: 11px; color: var(--text-primary); padding: 3px 6px; outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.input-sm:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+kbd {
+  display: inline-block; padding: 1px 5px; border-radius: 3px;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+  font-family: inherit; font-size: 10px; color: var(--text-secondary);
+}
+
+/* ---- Viewport chrome ---- */
+.viewport-title {
+  background: var(--bg-inset); padding: 3px 10px;
+  font-size: 10px; color: var(--text-muted); letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+/* ---- Transitions ---- */
+.btn, .input-sm, select { transition: background 0.12s, border-color 0.12s, box-shadow 0.12s; }

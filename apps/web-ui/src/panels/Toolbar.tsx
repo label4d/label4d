@@ -81,14 +81,14 @@ export function Toolbar() {
       <div className="mx-1 h-4 w-px bg-[#283242]" />
 
       <button
-        className="rounded bg-[#1d2530] px-2 py-1 text-slate-300 hover:bg-[#283242] disabled:opacity-40"
+        className="btn disabled:opacity-40"
         disabled={!session.history.canUndo}
         onClick={() => session.undo()}
       >
         ↩ 撤销
       </button>
       <button
-        className="rounded bg-[#1d2530] px-2 py-1 text-slate-300 hover:bg-[#283242] disabled:opacity-40"
+        className="btn disabled:opacity-40"
         disabled={!session.history.canRedo}
         onClick={() => session.redo()}
       >
@@ -123,7 +123,7 @@ export function Toolbar() {
       </select>
 
       {session.hiddenLabels.size > 0 && (
-        <button className="rounded bg-[#1d2530] px-2 py-1 text-slate-300 hover:bg-[#283242]" onClick={() => session.showAllLabels()}>
+        <button className="btn" onClick={() => session.showAllLabels()}>
           显示全部 ({session.hiddenLabels.size} 隐藏)
         </button>
       )}
@@ -131,7 +131,7 @@ export function Toolbar() {
       <div className="mx-1 h-4 w-px bg-[#283242]" />
 
       <button
-        className="rounded bg-[#1d2530] px-2 py-1 text-slate-300 hover:bg-[#283242]"
+        className="btn"
         disabled={busy}
         onClick={async () => {
           setBusy(true);
@@ -143,18 +143,18 @@ export function Toolbar() {
         {busy ? '推理中…' : '模型预标注'}
       </button>
       <button
-        className="rounded bg-[#1d2530] px-2 py-1 text-slate-300 hover:bg-[#283242]"
+        className="btn"
         onClick={() => download(session.exportSnapshot(), `${session.manifest?.id ?? 'sequence'}.snapshot.json`)}
       >
         导出快照
       </button>
       <button
-        className="rounded bg-[#1d2530] px-2 py-1 text-slate-300 hover:bg-[#283242]"
+        className="btn"
         onClick={() => download(session.exportNuScenes({ sampleStep: 5 }), `${session.manifest?.id ?? 'sequence'}.nuscenes.json`)}
       >
         导出 nuScenes
       </button>
-      <button className="rounded bg-[#1d2530] px-2 py-1 text-slate-300 hover:bg-[#283242]" onClick={() => fileRef.current?.click()}>
+      <button className="btn" onClick={() => fileRef.current?.click()}>
         导入快照
       </button>
       <input

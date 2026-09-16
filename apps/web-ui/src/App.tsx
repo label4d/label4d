@@ -111,23 +111,23 @@ function Workspace() {
           {mode === 'cloud' ? (
             <div className="flex min-h-0 flex-[3] gap-px bg-[#1d2530]">
               <div className="flex min-w-0 flex-[2] flex-col">
-                <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">4D 点云主视图（点云主导）</span>
+                <span className="viewport-title">4D 点云主视图（点云主导）</span>
                 <ThreeDView />
               </div>
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">三视图</span>
+                <span className="viewport-title">三视图</span>
                 <ThreeViewStrip />
               </div>
             </div>
           ) : (
             <div className="flex min-h-0 flex-[3] flex-col">
-              <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">BEV 俯视图（自上而下固定视角 · 滚轮缩放 / 拖动平移 · Shift+拖动框选）</span>
+              <span className="viewport-title">BEV 俯视图（自上而下固定视角 · 滚轮缩放 / 拖动平移 · Shift+拖动框选）</span>
               <BevView />
             </div>
           )}
           <div className="flex min-h-0 flex-[2] flex-col gap-px bg-[#1d2530] pt-px">
             <div className="flex min-h-0 flex-1 flex-col">
-              <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">
+              <span className="viewport-title">
                 相机图像 · {cameraCount} 路 · 4D 投影全相机同步高亮可点选
               </span>
               <div className="flex min-h-0 flex-1 gap-px">

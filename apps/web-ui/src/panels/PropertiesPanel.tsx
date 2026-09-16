@@ -172,8 +172,8 @@ export function PropertiesPanel() {
         )}
 
         <div className="mt-2 flex flex-wrap gap-1">
-          <button className="rounded bg-[#1d2530] px-2 py-1 hover:bg-[#283242]" onClick={() => session.setKeyframeAtCurrentFrame(track.meta.id)}>设关键帧 (K)</button>
-          <button className="rounded bg-[#1d2530] px-2 py-1 hover:bg-[#283242]" onClick={() => session.removeKeyframeAtCurrentFrame(track.meta.id)}>删关键帧</button>
+          <button className="btn" onClick={() => session.setKeyframeAtCurrentFrame(track.meta.id)}>设关键帧 (K)</button>
+          <button className="btn" onClick={() => session.removeKeyframeAtCurrentFrame(track.meta.id)}>删关键帧</button>
           <input
             className="w-14 rounded bg-[#1d2530] px-1 py-1 text-[10px] outline-none"
             placeholder="帧"
@@ -181,7 +181,7 @@ export function PropertiesPanel() {
             onChange={(e) => setCopyFrame(e.target.value)}
           />
           <button
-            className="rounded bg-[#1d2530] px-2 py-1 hover:bg-[#283242]"
+            className="btn"
             onClick={() => {
               const target = Number(copyFrame);
               if (Number.isFinite(target)) session.copyStateToFrame(track.meta.id, target);
@@ -189,9 +189,9 @@ export function PropertiesPanel() {
           >
             拷贝状态到帧
           </button>
-          <button className="rounded bg-[#1d2530] px-2 py-1 hover:bg-[#283242]" onClick={() => session.splitSelectedAtCurrentFrame()}>拆分</button>
-          <button className="rounded bg-[#1d2530] px-2 py-1 hover:bg-[#283242] disabled:opacity-40" disabled={selected.length < 2} onClick={() => session.mergeSelectedTracks()}>合并</button>
-          <button className="rounded bg-[#1d2530] px-2 py-1 hover:bg-[#283242]" onClick={() => session.duplicateSelection()} title="复制选中轨迹并偏移 2m">复制轨迹</button>
+          <button className="btn" onClick={() => session.splitSelectedAtCurrentFrame()}>拆分</button>
+          <button className="btn disabled:opacity-40" disabled={selected.length < 2} onClick={() => session.mergeSelectedTracks()}>合并</button>
+          <button className="btn" onClick={() => session.duplicateSelection()} title="复制选中轨迹并偏移 2m">复制轨迹</button>
           <button className="rounded bg-[#7a2430] px-2 py-1 text-rose-200 hover:bg-[#952c3c]" onClick={() => session.deleteSelection()}>删除 (Del)</button>
         </div>
 

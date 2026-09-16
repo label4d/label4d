@@ -8,16 +8,16 @@ export function PlaybackBar() {
 
   return (
     <div className="flex items-center gap-3 border-t border-[#1d2530] bg-[#0e1218] px-3 py-1.5 text-xs text-slate-300">
-      <button className="rounded bg-[#1d2530] px-2 py-1 hover:bg-[#283242]" onClick={() => session.setFrame(0)} title="第一帧">⏮</button>
-      <button className="rounded bg-[#1d2530] px-2 py-1 hover:bg-[#283242]" onClick={() => session.setFrame(session.frame - 1)} title="上一帧">◀</button>
+      <button className="btn" onClick={() => session.setFrame(0)} title="第一帧">⏮</button>
+      <button className="btn" onClick={() => session.setFrame(session.frame - 1)} title="上一帧">◀</button>
       <button
         className="rounded bg-[#2b6cff] px-3 py-1 font-medium text-white hover:bg-[#3d7bff]"
         onClick={() => (session.playhead.playing ? session.pause() : session.play())}
       >
         {session.playhead.playing ? '⏸ 暂停' : '▶ 播放'}
       </button>
-      <button className="rounded bg-[#1d2530] px-2 py-1 hover:bg-[#283242]" onClick={() => session.setFrame(session.frame + 1)} title="下一帧">▶|</button>
-      <button className="rounded bg-[#1d2530] px-2 py-1 hover:bg-[#283242]" onClick={() => session.setFrame(session.frameCount - 1)} title="最后一帧">⏭</button>
+      <button className="btn" onClick={() => session.setFrame(session.frame + 1)} title="下一帧">▶|</button>
+      <button className="btn" onClick={() => session.setFrame(session.frameCount - 1)} title="最后一帧">⏭</button>
 
       <select
         className="rounded bg-[#1d2530] px-1 py-1 outline-none"
