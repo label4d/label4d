@@ -7,6 +7,15 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "dev": "pnpm --filter apps/web-ui dev"
+    "dev": "pnpm --filter apps/web-ui dev",
+    "verify:preflight": "node scripts/verify-preflight.mjs",
+    "verify:domain": "pnpm --filter @labelfaster/core test",
+    "fixtures:s-mini": "node scripts/fixtures/make-s-mini.mjs",
+    "fixtures:r-mini": "node scripts/fixtures/prepare-r-mini.mjs",
+    "fixtures:validate": "node scripts/validate-manifest.mjs fixtures/schemas/manifest.v2.schema.json fixtures/s-mini/manifest.json fixtures/r-mini/manifest.json",
+    "verify:journey": "echo BLOCKED: J01 automation lands with H3 (docs/ai-acceptance-protocol.md) && exit 2",
+    "verify:faults": "echo BLOCKED: F01-F06 lands with H4 && exit 2",
+    "verify:exports": "echo BLOCKED: independent export validator lands with H3 && exit 2",
+    "verify:performance": "echo BLOCKED: L-scale perf lands in S3 && exit 2"
   }
 }

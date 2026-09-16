@@ -1,0 +1,166 @@
+{
+  "formatVersion": 2,
+  "datasetId": "s-mini",
+  "datasetVersion": "1.0.0",
+  "contentHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "worldConvention": {
+    "up": "z",
+    "units": "meter",
+    "angleUnit": "radian",
+    "originNote": "origin at ego frame 0"
+  },
+  "referenceFrames": [
+    {
+      "frameId": 0,
+      "timeUs": 200000
+    },
+    {
+      "frameId": 1,
+      "timeUs": 100000
+    }
+  ],
+  "pose": {
+    "source": "synthetic-static",
+    "interpolation": "none-samples-complete",
+    "maxGapUs": 100000,
+    "frames": [
+      {
+        "frameId": 0,
+        "timeUs": 200000,
+        "T_world_from_ego": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "frameId": 1,
+        "timeUs": 100000,
+        "T_world_from_ego": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      }
+    ]
+  },
+  "sensors": [
+    {
+      "sensorId": "lidar",
+      "type": "lidar",
+      "timeSync": {
+        "toleranceUs": 1000,
+        "fallback": "none"
+      },
+      "pcdTemplate": "pcd/{frame}.pcd",
+      "pointCloud": {
+        "fields": [
+          "x",
+          "y",
+          "z",
+          "intensity"
+        ],
+        "encoding": "binary-pcd",
+        "bytesPerPoint": 16,
+        "motionDistorted": false,
+        "referenceTime": "mid"
+      }
+    },
+    {
+      "sensorId": "cam",
+      "type": "camera",
+      "timeSync": {
+        "toleranceUs": 1000,
+        "fallback": "none"
+      },
+      "model": "pinhole",
+      "intrinsics": {
+        "fx": 400,
+        "fy": 400,
+        "cx": 320,
+        "cy": 240
+      },
+      "distortion": [],
+      "distortionState": "undistorted",
+      "width": 640,
+      "height": 480,
+      "T_ego_from_sensor": [
+        0,
+        0,
+        1,
+        0,
+        -1,
+        0,
+        0,
+        0,
+        0,
+        -1,
+        0,
+        0,
+        0,
+        0,
+        1.2,
+        1
+      ],
+      "imageTemplate": "images/{frame}.bmp"
+    }
+  ],
+  "bev": {
+    "tileset": {
+      "originX": -12.8,
+      "originY": -12.8,
+      "metersPerPixel": 0.05,
+      "width": 512,
+      "height": 512,
+      "tileSize": 512,
+      "urlTemplate": "bev/0/0/0.bmp",
+      "pixelCenter": "top-left-center",
+      "axisNote": "image +x -> world +x, image +y -> world +y (Z-up ground plane)"
+    },
+    "height": {
+      "encoding": "rgb24-fixed-point",
+      "scale": 0.01,
+      "offset": -1000,
+      "verticalDatum": "same-as-world",
+      "noData": null,
+      "samplePrecisionM": 0.01,
+      "tileset": {
+        "originX": -12.8,
+        "originY": -12.8,
+        "metersPerPixel": 0.05,
+        "width": 512,
+        "height": 512,
+        "tileSize": 512,
+        "urlTemplate": "heights/0/0/0.bmp"
+      }
+    }
+  },
+  "resources": [],
+  "notes": "minimal legal sample; contentHash must be recomputed after any edit"
+}

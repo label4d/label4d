@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://labelfaster.local/schemas/manifest.v2.schema.json",
+  "title": "Labelfaster DatasetManifest v2",
+  "type": "object",
+  "required": ["formatVersion", "datasetId", "datasetVersion", "contentHash", "referenceFrames", "pose", "sensors"],
+  "additionalProperties": false,
+  "properties": {
+    "formatVersion": { "const": 2 },
+    "datasetId": { "type": "string", "minLength": 1 },
+    "datasetVersion": { "type": "string", "minLength": 1 },
+    "contentHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "worldConvention": {
+      "type": "object",
+      "required": ["up", "units", "angleUnit"],
+      "properties": {
+        "up": { "const": "z" },
+        "units": { "const": "meter" },
+        "angleUnit": { "const": "radian" },
+        "originNote": { "type": "string" }
+      }
+    },
+    "referenceFrames": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["frameId", "timeUs"],
+        "additionalProperties": false,
+        "properties": {
+          "frameId": { "type": "integer", "minimum": 0 },
+          "timeUs": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "pose": {
+      "type": "object",
+      "required": ["source", "maxGapUs", "frames"],
+      "properties": {
+        "source": { "type": "string" },
+        "interpolation": { "enum": ["linear-translation-slerp-rotation", "none-samples-complete"] },
+        "maxGapUs": { "type": "integer", "minimum": 1 },
+        "notes": { "type": "string" },
+        "frames": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["frameId", "timeUs", "T_world_from_ego"],
+            "properties": {
+              "frameId": { "type": "integer" },
+              "timeUs": { "type": "integer" },
+              "T_world_from_ego": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 16,
+                "maxItems": 16
+              }
+            }
+          }
+        }
+      }
+    },
+    "sensors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sensorId", "type", "timeSync", "model", "distortionState", "T_ego_from_sensor"],
+        "properties": {
+          "sensorId": { "type": "string" },
+          "type": { "enum": ["camera", "lidar"] },
+          "timeSync": {
+            "type": "object",
+            "required": ["toleranceUs", "fallback"],
+            "properties": {
+              "toleranceUs": { "type": "integer", "minimum": 0 },
+              "fallback": { "enum": ["nearest", "none"] }
+            }
+          },
+          "model": { "enum": ["pinhole", "fisheye_equidistant", "fisheye_equisolid", "ocam", "atan", "none"] },
+          "intrinsics": {
+            "type": "object",
+            "required": ["fx", "fy", "cx", "cy"],
+            "properties": {
+              "fx": { "type": "number" }, "fy": { "type": "number" },
+              "cx": { "type": "number" }, "cy": { "type": "number" }
+            }
+          },
+          "distortion": { "type": "array", "items": { "type": "number" } },
+          "distortionState": { "enum": ["raw", "undistorted"] },
+          "width": { "type": "integer", "minimum": 1 },
+          "height": { "type": "integer", "minimum": 1 },
+          "T_ego_from_sensor": { "type": "array", "items": { "type": "number" }, "minItems": 16, "maxItems": 16 },
+          "imageTemplate": { "type": "string" },
+          "pcdTemplate": { "type": "string" },
+          "pointCloud": {
+            "type": "object",
+            "properties": {
+              "fields": { "type": "array", "items": { "type": "string" } },
+              "encoding": { "type": "string" },
+              "bytesPerPoint": { "type": "integer" },
+              "motionDistorted": { "type": "boolean" },
+              "referenceTime": { "enum": ["start", "mid", "end"] }
+            }
+          }
+        }
+      }
+    },
+    "bev": {
+      "type": "object",
+      "required": ["tileset"],
+      "properties": {
+        "tileset": {
+          "type": "object",
+          "required": ["originX", "originY", "metersPerPixel", "width", "height", "tileSize", "urlTemplate"],
+          "properties": {
+            "originX": { "type": "number" },
+            "originY": { "type": "number" },
+            "metersPerPixel": { "type": "number", "exclusiveMinimum": 0 },
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 },
+            "tileSize": { "type": "integer", "minimum": 1 },
+            "urlTemplate": { "type": "string" },
+            "pixelCenter": { "const": "top-left-center" },
+            "axisNote": { "type": "string" }
+          }
+        },
+        "height": {
+          "type": "object",
+          "required": ["encoding", "scale", "offset", "verticalDatum", "noData"],
+          "properties": {
+            "encoding": { "const": "rgb24-fixed-point" },
+            "scale": { "type": "number" },
+            "offset": { "type": "number" },
+            "verticalDatum": { "type": "string" },
+            "noData": { "type": ["number", "null"] },
+            "samplePrecisionM": { "type": "number" },
+            "tileset": { "type": "object" }
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["resourceId", "uri", "sha256"],
+        "properties": {
+          "resourceId": { "type": "string" },
+          "uri": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "bytes": { "type": "integer" }
+        }
+      }
+    },
+    "notes": { "type": "string" }
+  }
+}

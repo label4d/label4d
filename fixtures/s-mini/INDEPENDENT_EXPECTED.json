@@ -1,0 +1,168 @@
+{
+  "note": "Hand-computed ground truth. J01-3 edit means: frame15 keyframe set to (5,2,1).",
+  "trajectory": {
+    "label": "Car",
+    "keyframes": [
+      {
+        "frame": 10,
+        "center": [
+          0,
+          0,
+          1
+        ],
+        "yaw": 0,
+        "size": [
+          4,
+          2,
+          2
+        ]
+      },
+      {
+        "frame": 20,
+        "center": [
+          10,
+          0,
+          1
+        ],
+        "yaw": 0,
+        "size": [
+          4,
+          2,
+          2
+        ]
+      }
+    ],
+    "existenceHalfOpen": [
+      10,
+      21
+    ],
+    "interpolationBeforeEdit": {
+      "12": [
+        2,
+        0,
+        1
+      ],
+      "15": [
+        5,
+        0,
+        1
+      ],
+      "18": [
+        8,
+        0,
+        1
+      ]
+    },
+    "interpolationAfterJ01_3Edit": {
+      "12": [
+        2,
+        0.8,
+        1
+      ],
+      "15": [
+        5,
+        2,
+        1
+      ],
+      "18": [
+        8,
+        0.8,
+        1
+      ]
+    }
+  },
+  "projectionControlPointsFrame20": [
+    {
+      "world": [
+        8,
+        -1,
+        0
+      ],
+      "pixel": {
+        "x": 370,
+        "y": 300
+      }
+    },
+    {
+      "world": [
+        12,
+        -1,
+        0
+      ],
+      "pixel": {
+        "x": 353.33,
+        "y": 280
+      }
+    },
+    {
+      "world": [
+        8,
+        1,
+        0
+      ],
+      "pixel": {
+        "x": 270,
+        "y": 300
+      }
+    },
+    {
+      "world": [
+        12,
+        1,
+        0
+      ],
+      "pixel": {
+        "x": 286.67,
+        "y": 280
+      }
+    },
+    {
+      "world": [
+        8,
+        -1,
+        2
+      ],
+      "pixel": {
+        "x": 370,
+        "y": 200
+      }
+    },
+    {
+      "world": [
+        12,
+        -1,
+        2
+      ],
+      "pixel": {
+        "x": 353.33,
+        "y": 213.33
+      }
+    },
+    {
+      "world": [
+        8,
+        1,
+        2
+      ],
+      "pixel": {
+        "x": 270,
+        "y": 200
+      }
+    },
+    {
+      "world": [
+        12,
+        1,
+        2
+      ],
+      "pixel": {
+        "x": 286.67,
+        "y": 213.33
+      }
+    }
+  ],
+  "tolerance": {
+    "pixel": 0.5,
+    "positionM": 0.01
+  }
+}

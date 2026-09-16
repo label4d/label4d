@@ -6,3 +6,10 @@ coverage
 .vscode
 .idea
 apps/web-ui/public/kitti/
+fixtures/s-mini/pcd/
+fixtures/s-mini/images/
+fixtures/s-mini/bev/
+fixtures/s-mini/heights/
+fixtures/r-mini/pcd/
+fixtures/r-mini/images/
+fixtures/r-mini/bev/
