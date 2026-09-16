@@ -16,6 +16,7 @@
     "verify:journey": "echo BLOCKED: J01 automation lands with H3 (docs/ai-acceptance-protocol.md) && exit 2",
     "verify:faults": "echo BLOCKED: F01-F06 lands with H4 && exit 2",
     "verify:exports": "echo BLOCKED: independent export validator lands with H3 && exit 2",
-    "verify:performance": "echo BLOCKED: L-scale perf lands in S3 && exit 2"
+    "verify:performance": "echo BLOCKED: L-scale perf lands in S3 && exit 2",
+    "fixtures:world": "uv run --project tools/py python tools/py/build_world_cloud.py --input apps/web-ui/public/kitti --output apps/web-ui/public/kitti"
   }
 }

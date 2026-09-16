@@ -13,3 +13,4 @@ fixtures/s-mini/heights/
 fixtures/r-mini/pcd/
 fixtures/r-mini/images/
 fixtures/r-mini/bev/
+tools/py/.venv

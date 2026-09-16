@@ -5,6 +5,7 @@ import {
   AttributeBadgeRenderer,
   PointCloudFrameView,
   TrackInstanceRenderer,
+  WorldCloudOverlay,
   vec3,
 } from '@labelfaster/core';
 import { useSession } from '../session/SessionProvider';
@@ -38,6 +39,17 @@ export function ThreeDView() {
 
     const cloudView = new PointCloudFrameView();
     scene.add(cloudView.group);
+    // 全局拼接点云（4D 序列静态环境）流式加载
+    let overlay: WorldCloudOverlay | null = null;
+    if (session.manifest && (session.manifest as { worldCloud?: { indexUrl: string } }).worldCloud) {
+      overlay = new WorldCloudOverlay((url) =>
+        fetch(url).then((r) => r.arrayBuffer())
+      );
+      scene.add(overlay.group);
+      void overlay
+        .load((session.manifest as unknown as { worldCloud: { indexUrl: string } }).worldCloud.indexUrl)
+        .then(() => overlay && (overlay.enabled = true));
+    }
     const instance = new TrackInstanceRenderer(session.store, session.selection, session.labels);
     scene.add(instance.group);
     const badges = new AttributeBadgeRenderer(session.labels);
@@ -146,6 +158,7 @@ export function ThreeDView() {
       if (followEnabled) {
         const ego = session.ego.positionAt(frame);
         controls.target.set(ego.x, 0, ego.z);
+        void overlay?.ensureAround(ego.x, ego.z, 120);
       }
       controls.update();
       renderer.render(scene, camera);
@@ -164,6 +177,7 @@ export function ThreeDView() {
       offManifest();
       controls.dispose();
       cloudView.dispose();
+      if (overlay) overlay.dispose();
       instance.dispose();
       badges.dispose();
       renderer.dispose();
