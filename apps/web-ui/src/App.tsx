@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { SessionProvider, useSession } from './session/SessionProvider';
+import { useEffect, useState } from 'react';
+import { SessionProvider, useSession, useSessionTick } from './session/SessionProvider';
 import { Toolbar } from './panels/Toolbar';
 import { PlaybackBar } from './panels/PlaybackBar';
 import { Timeline } from './panels/Timeline';
@@ -87,32 +87,55 @@ function Shortcuts() {
 }
 
 function Workspace() {
+  const session = useSession();
+  useSessionTick(['manifestLoaded']);
+  const [mode, setMode] = useState<'bev' | 'cloud'>('cloud');
+  const cameraCount = session.projectors.size;
   return (
     <div className="flex h-screen w-screen flex-col bg-[#0b0e13] text-slate-200">
       <Shortcuts />
       <Toolbar />
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-[3] gap-px bg-[#1d2530]">
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">3D 点云视图（模式 B）</span>
-              <ThreeDView />
+          <div className="flex items-center gap-1 bg-[#10161f] px-2 py-1">
+            {(['cloud', 'bev'] as const).map((m) => (
+              <button
+                key={m}
+                className={`rounded px-3 py-1 text-[11px] ${mode === m ? 'bg-[#2b6cff] text-white' : 'bg-[#1d2530] text-slate-300 hover:bg-[#283242]'}`}
+                onClick={() => setMode(m)}
+              >
+                {m === 'cloud' ? '4D 点云模式' : 'BEV 俯视模式'}
+              </button>
+            ))}
+          </div>
+          {mode === 'cloud' ? (
+            <div className="flex min-h-0 flex-[3] gap-px bg-[#1d2530]">
+              <div className="flex min-w-0 flex-[2] flex-col">
+                <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">4D 点云主视图（点云主导）</span>
+                <ThreeDView />
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">三视图</span>
+                <ThreeViewStrip />
+              </div>
             </div>
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">
-                BEV 俯视图（模式 A · Three.js 正交 + 瓦片底图）
-              </span>
+          ) : (
+            <div className="flex min-h-0 flex-[3] flex-col">
+              <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">BEV 俯视图（自上而下固定视角 · 滚轮缩放 / 拖动平移 · Shift+拖动框选）</span>
               <BevView />
             </div>
-          </div>
+          )}
           <div className="flex min-h-0 flex-[2] flex-col gap-px bg-[#1d2530] pt-px">
             <div className="flex min-h-0 flex-1 flex-col">
-              <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">相机图像 · 4D 投影可点选</span>
-              <CameraView />
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col">
-              <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">点云三视图</span>
-              <ThreeViewStrip />
+              <span className="bg-[#10161f] px-2 py-0.5 text-[10px] text-slate-500">
+                相机图像 · {cameraCount} 路 · 4D 投影全相机同步高亮可点选
+              </span>
+              <div className="flex min-h-0 flex-1 gap-px">
+                {Array.from({ length: Math.max(1, cameraCount) }, (_, i) => (
+                  <CameraView key={i} index={i} />
+                ))}
+                {cameraCount === 0 && <div className="flex flex-1 items-center justify-center text-[10px] text-slate-600">当前数据无相机</div>}
+              </div>
             </div>
           </div>
         </div>

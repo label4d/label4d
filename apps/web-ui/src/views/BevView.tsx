@@ -257,6 +257,11 @@ export function BevView() {
       if (e.button !== 0) return;
       const g = toGesture(e);
       const ctx = buildContext(g.world, g.rayOrigin, g.rayDir, e);
+      // 空白处左键拖动 = 平移视图（Shift 保留给框选）
+      if (!ctx.pickedId && !e.shiftKey) {
+        panLast = { x: e.clientX, y: e.clientY };
+        return;
+      }
       session.applyIntent(session.tools.pointerDown(
         { world: g.world, screen: g.screen, button: e.button, shift: e.shiftKey, alt: e.altKey },
         ctx

@@ -104,11 +104,11 @@ for (let i = 0; i < W * H; i++) {
   const c = counts[i];
   const h = counts[i] > 0 && maxH[i] > -Infinity ? maxH[i] : 0;
   // ground color: asphalt base, brightness by returns, green tint by height
-  const b = Math.min(230, 78 + Math.min(c, 24) * 8);
+  const b = Math.min(210, 26 + Math.min(c, 24) * 9);
   const hTint = hMax > hMin ? Math.max(0, Math.min(1, (h - hMin) / (hMax - hMin))) : 0;
-  ground[i * 4] = Math.min(255, b * 0.85 + hTint * 60);
-  ground[i * 4 + 1] = Math.min(255, b + hTint * 90);
-  ground[i * 4 + 2] = Math.min(255, b + 24);
+  ground[i * 4] = Math.min(255, b * 0.55 + hTint * 30);
+  ground[i * 4 + 1] = Math.min(255, b + hTint * 60);
+  ground[i * 4 + 2] = Math.min(255, b * 1.1 + 20);
   ground[i * 4 + 3] = 255;
   // height raster: fixed-point RGB scheme (matches HeightField.decodePackedHeights)
   const v = Math.max(0, Math.min(16777215, Math.round((h + 1000) * 100)));

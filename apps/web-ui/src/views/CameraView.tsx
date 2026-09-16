@@ -8,7 +8,7 @@ import { useSession } from '../session/SessionProvider';
  * (pinhole / fisheye). Projected hulls are clickable to select the 4D
  * object; double-click opens the attribute editor at the cursor.
  */
-export function CameraView() {
+export function CameraView({ index = 0 }: { index?: number }) {
   const session = useSession();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -84,7 +84,6 @@ export function CameraView() {
     let rafId = 0;
     const ticks = { n: 0, wanted: null as string | null };
     (window as unknown as { __lfCamTicks?: typeof ticks }).__lfCamTicks = ticks;
-    const wanted = () => cameraId ?? session.activeCameraId ?? [...session.projectors.keys()][0] ?? null;
     const renderLoop = () => {
       try {
         runFrame();
@@ -96,13 +95,14 @@ export function CameraView() {
     };
     const runFrame = () => {
       ticks.n++;
-      ticks.wanted = wanted();
-      if (wanted() && wanted() !== currentProjectorId) {
-        const projector = session.projectors.get(wanted() as string);
+      const cameras = [...session.projectors.keys()];
+      const wantedId = cameras.length ? cameras[Math.min(index, cameras.length - 1)] : null;
+      if (wantedId && wantedId !== currentProjectorId) {
+        const projector = session.projectors.get(wantedId);
         if (projector) {
           view.attachProjector(projector);
           view.camera.userData.config = projector.config;
-          currentProjectorId = wanted;
+          currentProjectorId = wantedId;
           currentImage = null; // force re-set
         }
       }

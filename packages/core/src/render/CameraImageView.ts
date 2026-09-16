@@ -18,6 +18,8 @@ export interface CameraViewOptions {
   showAll: boolean;
   /** project the point cloud onto the image as depth/RGB dots */
   cloudProjection: boolean;
+  /** 框内点云支撑少于该值时不绘制投影（避免投影悬空框） */
+  minSupportPoints: number;
 }
 
 interface HullEntry {
@@ -110,7 +112,7 @@ export class CameraImageView {
   private readonly labelSprites = new Map<string, PixelLabel>();
   private hulls: HullEntry[] = [];
   private projector: CameraProjector | null = null;
-  private options: CameraViewOptions = { showAll: false, cloudProjection: true };
+  private options: CameraViewOptions = { showAll: false, cloudProjection: true, minSupportPoints: 20 };
   private readonly geomLines: DynamicLines;
   private readonly geomBuf: Float32Array;
   private readonly geomColors: Float32Array;
@@ -225,8 +227,19 @@ export class CameraImageView {
       const state = store.resolveState(id, frame);
       if (!state) continue;
       const record = store.getTrack(id);
+      // 点支撑校验：框内没有点云证据的对象不投影（避免悬空框）
+      if (this.countBoxSupport(cloud, state.pos, state.yaw, state.size) < this.options.minSupportPoints) continue;
       const projection: BoxProjection = this.projector.projectBox(state.pos, state.yaw, state.size, frame);
       if (!projection.visible || projection.hull.length < 6) continue;
+      // 完全越界的投影不绘制
+      let hMinX = Infinity, hMaxX = -Infinity, hMinY = Infinity, hMaxY = -Infinity;
+      for (let i = 0; i < projection.hull.length / 2; i++) {
+        hMinX = Math.min(hMinX, projection.hull[i * 2]);
+        hMaxX = Math.max(hMaxX, projection.hull[i * 2]);
+        hMinY = Math.min(hMinY, projection.hull[i * 2 + 1]);
+        hMaxY = Math.max(hMaxY, projection.hull[i * 2 + 1]);
+      }
+      if (hMaxX < 0 || hMinX > width || hMaxY < 0 || hMinY > height) continue;
       this.hulls.push({ id, hull: projection.hull, depth: projection.minDepth });
 
       color.set(colorForLabel(this.labelDefs, record?.meta.label ?? ''));
@@ -389,6 +402,26 @@ export class CameraImageView {
   }
 
   // ---- internals ----
+
+  /** 框内点云支撑计数（stride 采样估计全量密度）。 */
+  private countBoxSupport(cloud: PointCloudFrame, pos: { x: number; y: number; z: number }, yaw: number, size: { x: number; y: number; z: number }): number {
+    if (!cloud || cloud.count === 0) return 0;
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const hl = size.x / 2 + 0.1, hw = size.z / 2 + 0.1;
+    const hLo = pos.y - size.y / 2 - 0.15, hHi = pos.y + size.y / 2 + 0.15;
+    const stride = Math.max(1, Math.ceil(cloud.count / 12000));
+    let n = 0;
+    for (let i = 0; i < cloud.count; i += stride) {
+      const dx = cloud.positions[i * 3] - pos.x;
+      const dy = cloud.positions[i * 3 + 1] - pos.y;
+      const dz = cloud.positions[i * 3 + 2] - pos.z;
+      if (dy < hLo || dy > hHi) continue;
+      const lx = dx * c - dz * s;
+      const lz = dx * s + dz * c;
+      if (lx >= -hl && lx <= hl && lz >= -hw && lz <= hw) n++;
+    }
+    return n * stride;
+  }
 
   private flushColors(lines: DynamicLines, colors: Float32Array, vertexCount: number): void {
     const attr = lines.object.geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
