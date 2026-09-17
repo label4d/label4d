@@ -190,15 +190,17 @@ export class ThreeViewPanel {
   private viewCenter: Vec3 = { x: 0, y: 0, z: 0 };
   private halfExtent = 45;
 
-  /** viewport px -> panel plane coords (matches fit()) */
+  /** viewport px -> panel plane coords (matches fit(), includes user pan) */
   screenToPlane(px: number, py: number, viewportW: number, viewportH: number): { x: number; y: number } {
     const ndcX = (px / Math.max(1, viewportW)) * 2 - 1;
     const ndcY = -(py / Math.max(1, viewportH)) * 2 + 1;
     const h = this.halfExtent;
     const c = this.viewCenter;
-    if (this.axis === 'top') return { x: c.x + ndcX * h, y: c.z - ndcY * h };
-    if (this.axis === 'front') return { x: c.x + ndcX * h, y: c.y + ndcY * h };
-    return { x: c.z - ndcX * h, y: c.y + ndcY * h };
+    const panX = this.userPanX * h;
+    const panY = this.userPanY * h;
+    if (this.axis === 'top') return { x: c.x + ndcX * h + panX, y: c.z - ndcY * h + panY };
+    if (this.axis === 'front') return { x: c.x + ndcX * h + panX, y: c.y + ndcY * h + panY };
+    return { x: c.z - ndcX * h + panX, y: c.y + ndcY * h + panY };
   }
 
   fit(center: Vec3, halfExtent: number): void {
@@ -207,7 +209,9 @@ export class ThreeViewPanel {
     const panY = this.userPanY * half;
     this.viewCenter = { ...center };
     this.halfExtent = half;
-    const adjusted = this.planeToWorld(center.x + panX, center.y + panY);
+    // 平移量定义在平面坐标上，基点必须经 toPlane 换算（侧视平面x=世界z，俯视平面y=世界z）
+    const [pcx, pcy] = this.toPlane(center);
+    const adjusted = this.planeToWorld(pcx + panX, pcy + panY);
     if (this.axis === 'top') {
       this.camera.position.set(adjusted.x, 500, adjusted.z);
       this.camera.up.set(0, 0, -1);
@@ -232,8 +236,13 @@ export class ThreeViewPanel {
   }
 
   panByFraction(dnx: number, dny: number): void {
-    this.userPanX -= dnx * 2 / this.userZoom;
-    this.userPanY -= dny * 2 / this.userZoom;
+    // dnx/dny 为屏幕位移比例（右/下为正）。各轴平面坐标与屏幕方向的对应不同：
+    // top: 平面x=屏幕右, 平面y=屏幕下；front: 平面y=屏幕上；side: 平面x=屏幕左, 平面y=屏幕上。
+    // 相机沿平面轴移动 +pan 时画面向该轴正向的反方向滑动，故取负号。
+    const sx = this.axis === 'side' ? -1 : 1;
+    const sy = this.axis === 'top' ? 1 : -1;
+    this.userPanX -= (sx * dnx * 2) / this.userZoom;
+    this.userPanY -= (sy * dny * 2) / this.userZoom;
   }
 
   resetUserView(): void { this.userZoom = 1; this.userPanX = 0; this.userPanY = 0; }
