@@ -86,8 +86,11 @@ export function CameraView({ index = 0 }: { index?: number }) {
       const rect = canvas.getBoundingClientRect();
       const config = (view.camera.userData as { config?: { width: number; height: number } }).config;
       if (!config) return;
-      const k = config.width / rect.width;
-      view.panByPixels((e.clientX - panLast.x) * k, -(e.clientY - panLast.y) * k);
+      // 严格像素跟随：正交视口宽 config.width/viewScale 图像像素铺满 rect.width 屏幕像素；
+      // 画布与图像纵横比不同（拉伸填充），横纵系数分开算
+      const kx = config.width / (rect.width * view.viewScaleValue);
+      const ky = config.height / (rect.height * view.viewScaleValue);
+      view.panByPixels((e.clientX - panLast.x) * kx, -(e.clientY - panLast.y) * ky);
       panLast = { x: e.clientX, y: e.clientY };
     });
     canvas.addEventListener('pointerup', () => { panLast = null; });
