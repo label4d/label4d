@@ -40,9 +40,11 @@ export function CameraView({ index = 0 }: { index?: number }) {
       const rect = canvas.getBoundingClientRect();
       const config = view.camera.userData.config as { width: number; height: number } | undefined;
       if (!config) return null;
+      // 感知 pan/zoom 的画布->图像像素换算（整幅图铺满画布的比例映射在缩放后是错的）
+      const img = view.toImagePixel(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
       return {
-        x: ((e.clientX - rect.left) / rect.width) * config.width,
-        y: ((e.clientY - rect.top) / rect.height) * config.height,
+        x: img.x,
+        y: img.y,
         client: { x: e.clientX - rect.left, y: e.clientY - rect.top },
       };
     };
@@ -99,9 +101,9 @@ export function CameraView({ index = 0 }: { index?: number }) {
       const rect = canvas.getBoundingClientRect();
       const config = (view.camera.userData as { config?: { width: number; height: number } }).config;
       if (!config) return;
-      const imgX = ((e.clientX - rect.left) / rect.width) * config.width;
-      const imgYGl = config.height - ((e.clientY - rect.top) / rect.height) * config.height;
-      view.zoomAtCursor(imgX, imgYGl, Math.exp(-e.deltaY * 0.0015));
+      const img = view.toImagePixel(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
+      const imgYGl = config.height - img.y;
+      view.zoomAtCursor(img.x, imgYGl, Math.exp(-e.deltaY * 0.0015));
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
 

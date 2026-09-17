@@ -427,6 +427,21 @@ export class CameraImageView {
     return best;
   }
 
+  /**
+   * 画布像素（左上原点）-> 图像像素（左上原点）。
+   * 正交视口只显示图像的 viewScale 分之一窗口（中心 viewCx/viewCy，GL y 向上），
+   * 点击/双击/滚轮锚点必须经此换算，不能用整幅图铺满画布的比例映射。
+   */
+  toImagePixel(canvasX: number, canvasY: number, canvasW: number, canvasH: number): { x: number; y: number } {
+    const config = this.projector?.config;
+    if (!config) return { x: 0, y: 0 };
+    const halfW = config.width / 2 / this.viewScale;
+    const halfH = config.height / 2 / this.viewScale;
+    const glX = this.viewCx - halfW + (canvasX / Math.max(1, canvasW)) * 2 * halfW;
+    const glY = this.viewCy - halfH + (1 - canvasY / Math.max(1, canvasH)) * 2 * halfH;
+    return { x: glX, y: config.height - glY };
+  }
+
   render(renderer: THREE.WebGLRenderer): void {
     renderer.render(this.scene, this.camera);
   }

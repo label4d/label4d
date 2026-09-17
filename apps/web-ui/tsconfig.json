@@ -3,7 +3,10 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "baseUrl": "src",
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "paths": {
+      "@labelfaster/core": ["../../../packages/core/src/index.ts"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "../../packages/core/src/index.ts"]
 }
