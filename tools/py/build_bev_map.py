@@ -70,8 +70,10 @@ def main() -> None:
     himg[..., 2] = ((hv >> 16) & 255).reshape(args.size, args.size).astype(np.uint8)
 
     (in_dir / "bev").mkdir(parents=True, exist_ok=True)
-    Image.fromarray(img[::-1], "RGB").save(in_dir / "bev" / "bev-map.bmp")
-    Image.fromarray(himg[::-1], "RGB").save(in_dir / "bev" / "bev-height.bmp")
+    # 客户端契约（BevTileRenderer/HeightField）：图像顶行 = originZ（最小 z），
+    # 行号向下 = +z。数组行号本就按 z 升序构建，直接保存，不得翻转。
+    Image.fromarray(img, "RGB").save(in_dir / "bev" / "bev-map.bmp")
+    Image.fromarray(himg, "RGB").save(in_dir / "bev" / "bev-height.bmp")
 
     mpath = in_dir / "manifest.json"
     m = json.loads(mpath.read_text())
