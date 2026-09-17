@@ -64,9 +64,9 @@ export {
   HeightField, decodePackedHeights, encodeHeightsToRGBA,
 } from './stream/HeightField';
 export type { RgbaImage, ImageFetcher, ImageDecoder } from './stream/HeightField';
-export { PotreeOverlay, defaultNetClient } from './stream/PotreeOverlay';
+export { PotreeOverlay, defaultNetClient, potreeUncompressedDecoder } from './stream/PotreeOverlay';
 export type {
-  PotreeNode, PotreeMetadata, PotreeDecodedChunk, LazDecoder, NetClient,
+  PotreeNode, PotreeMetadata, PotreeDecodedChunk, PotreeDecoder, PotreeDecodeContext, NetClient,
 } from './stream/PotreeOverlay';
 
 // playback

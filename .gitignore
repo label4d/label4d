@@ -14,3 +14,6 @@ fixtures/r-mini/pcd/
 fixtures/r-mini/images/
 fixtures/r-mini/bev/
 tools/py/.venv
+
+# PotreeConverter 源码 clone（构建说明见 third_party/POTREE_BUILD.md）
+third_party/PotreeConverter/

@@ -33,8 +33,8 @@ import { FrameBuffer } from '../stream/FrameBuffer';
 import { BevPyramid } from '../stream/BevPyramid';
 import { HeightField } from '../stream/HeightField';
 import type { ImageFetcher, ImageDecoder } from '../stream/HeightField';
-import { PotreeOverlay } from '../stream/PotreeOverlay';
-import type { LazDecoder, NetClient } from '../stream/PotreeOverlay';
+import { PotreeOverlay, potreeUncompressedDecoder } from '../stream/PotreeOverlay';
+import type { PotreeDecoder, NetClient } from '../stream/PotreeOverlay';
 import { parsePcd } from '../io/pcd';
 import type { PointCloudFrame } from '../io/pcd';
 import { substituteFrame } from '../io/manifest';
@@ -66,7 +66,7 @@ export interface SessionDeps {
   fetchImage?: ImageFetcher;
   decodeImage?: ImageDecoder;
   net?: NetClient;
-  potreeDecoder?: LazDecoder;
+  potreeDecoder?: PotreeDecoder;
   schedulerBudgetBytes?: number;
   pointCloudWindow?: { ahead: number; behind: number; budgetBytes: number };
 }
@@ -306,7 +306,7 @@ export class EditorSession {
       this.potree = new PotreeOverlay(
         manifest.potree.url,
         this.scheduler,
-        this.deps.potreeDecoder ?? (() => ({ positions: new Float32Array(0), count: 0 })),
+        this.deps.potreeDecoder ?? potreeUncompressedDecoder,
         this.deps.net ?? defaultNet
       );
       this.potree.initialize().catch(() => {
