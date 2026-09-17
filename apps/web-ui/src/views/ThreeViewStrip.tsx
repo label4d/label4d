@@ -64,8 +64,9 @@ export function ThreeViewStrip() {
       canvas.addEventListener('pointerdown', onDown);
       canvas.addEventListener('pointerup', onUp);
       let panDrag: { x: number; y: number } | null = null;
+      // 左键/中键拖拽平移；左键位移 ≤4px 视为点击选择（onUp 中判定）
       const onPanDown = (ev: MouseEvent) => {
-        if (ev.button === 1 || (ev.button === 0 && ev.shiftKey)) { panDrag = { x: ev.clientX, y: ev.clientY }; canvas.setPointerCapture((ev as unknown as PointerEvent).pointerId); }
+        if (ev.button === 0 || ev.button === 1) { panDrag = { x: ev.clientX, y: ev.clientY }; canvas.setPointerCapture((ev as unknown as PointerEvent).pointerId); }
       };
       const onPanMove = (ev: MouseEvent) => {
         if (!panDrag) return;
