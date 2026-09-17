@@ -87,7 +87,7 @@ export function CameraView({ index = 0 }: { index?: number }) {
       const config = (view.camera.userData as { config?: { width: number; height: number } }).config;
       if (!config) return;
       const k = config.width / rect.width;
-      view.panByPixels(-(e.clientX - panLast.x) * k, (e.clientY - panLast.y) * k);
+      view.panByPixels((e.clientX - panLast.x) * k, (e.clientY - panLast.y) * k);
       panLast = { x: e.clientX, y: e.clientY };
     });
     canvas.addEventListener('pointerup', () => { panLast = null; });
