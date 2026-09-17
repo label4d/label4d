@@ -247,11 +247,26 @@ export function BevView() {
     };
 
     let panLast: { x: number; y: number } | null = null;
+    let rightPan: { x: number; y: number; moved: number } | null = null;
+
+    // 屏幕像素 -> 世界米平移（正交视口随 halfExtent/纵横比变化）
+    const panView = (dx: number, dy: number) => {
+      const rect = canvas.getBoundingClientRect();
+      const aspect = rect.width / Math.max(1, rect.height);
+      view.cx -= dx * ((2 * view.halfExtent * aspect) / rect.width);
+      view.cz += dy * ((2 * view.halfExtent) / rect.height);
+    };
 
     const onPointerDown = (e: PointerEvent) => {
       canvas.setPointerCapture(e.pointerId);
       if (e.button === 1) {
         panLast = { x: e.clientX, y: e.clientY };
+        return;
+      }
+      // 右键拖拽平移（与 3D 点云视图一致）；位移 <5px 视为右键点击，在 pointerup 弹出菜单
+      if (e.button === 2) {
+        hideMenu();
+        rightPan = { x: e.clientX, y: e.clientY, moved: 0 };
         return;
       }
       if (e.button !== 0) return;
@@ -269,13 +284,15 @@ export function BevView() {
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      if (rightPan) {
+        panView(e.clientX - rightPan.x, e.clientY - rightPan.y);
+        rightPan.moved += Math.hypot(e.clientX - rightPan.x, e.clientY - rightPan.y);
+        rightPan.x = e.clientX;
+        rightPan.y = e.clientY;
+        return;
+      }
       if (panLast) {
-        const rect = canvas.getBoundingClientRect();
-        const aspect = rect.width / Math.max(1, rect.height);
-        const wppX = (2 * view.halfExtent * aspect) / rect.width;
-        const wppY = (2 * view.halfExtent) / rect.height;
-        view.cx -= (e.clientX - panLast.x) * wppX;
-        view.cz += (e.clientY - panLast.y) * wppY; // screen down = +Z
+        panView(e.clientX - panLast.x, e.clientY - panLast.y);
         panLast = { x: e.clientX, y: e.clientY };
         return;
       }
@@ -309,6 +326,12 @@ export function BevView() {
     };
 
     const onPointerUp = (e: PointerEvent) => {
+      if (rightPan) {
+        const openMenu = rightPan.moved < 5;
+        rightPan = null;
+        if (openMenu) openContextMenu(e.clientX, e.clientY);
+        return;
+      }
       if (panLast) {
         panLast = null;
         return;
@@ -323,6 +346,8 @@ export function BevView() {
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      // 先同步相机，保证快速连续滚动时光标锚点用的是最新视口
+      applyCamera();
       const g = toGesture(e);
       const factor = Math.exp(e.deltaY * 0.0012);
       const next = Math.min(500, Math.max(4, view.halfExtent * factor));
@@ -345,14 +370,15 @@ export function BevView() {
       applyCamera();
     };
 
-    const onContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      const g = toGesture(e);
-      const ctx = buildContext(g.world, g.rayOrigin, g.rayDir, e);
+    // 菜单由 pointerup 判定后打开（右键拖拽平移与右键点击的区分），返回命中的对象 id
+    const openContextMenu = (cx: number, cy: number): string | null => {
+      const fake = { clientX: cx, clientY: cy } as MouseEvent;
+      const g = toGesture(fake);
+      const ctx = buildContext(g.world, g.rayOrigin, g.rayDir, fake);
       wrap.dataset.lastContext = ctx.pickedId ?? 'none';
       if (!ctx.pickedId) {
         hideMenu();
-        return;
+        return null;
       }
       session.selection.select([ctx.pickedId]);
       menuDiv.innerHTML = '';
@@ -372,28 +398,21 @@ export function BevView() {
         menuItem(`隐藏类别「${label}」`, () => session.setLabelHidden(label, true));
       }
       const rect2 = canvas.getBoundingClientRect();
-      menuDiv.style.left = `${Math.min(e.clientX - rect2.left, rect2.width - 160)}px`;
-      menuDiv.style.top = `${Math.min(e.clientY - rect2.top, rect2.height - 220)}px`;
+      menuDiv.style.left = `${Math.min(cx - rect2.left, rect2.width - 160)}px`;
+      menuDiv.style.top = `${Math.min(cy - rect2.top, rect2.height - 220)}px`;
       menuDiv.style.display = 'block';
+      return ctx.pickedId;
+    };
+    const onContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
     };
     const onDocClick = (e: MouseEvent) => {
       if (!menuDiv.contains(e.target as Node)) hideMenu();
     };
     document.addEventListener('click', onDocClick);
     // debug/automation hook: same code path as a real right-click
-    (window as unknown as { __lfBevContext?: (x: number, y: number) => void }).__lfBevContext = (cx: number, cy: number) => {
-      const fake = {
-        clientX: cx,
-        clientY: cy,
-        shiftKey: false,
-        altKey: false,
-        preventDefault: () => undefined,
-      };
-      const g = toGesture(fake as MouseEvent);
-      const ctx = buildContext(g.world, g.rayOrigin, g.rayDir, fake as MouseEvent);
-      onContextMenu(fake as unknown as MouseEvent);
-      return ctx.pickedId;
-    };
+    (window as unknown as { __lfBevContext?: (x: number, y: number) => void }).__lfBevContext = (cx: number, cy: number) =>
+      openContextMenu(cx, cy);
 
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
@@ -419,6 +438,8 @@ export function BevView() {
 
     const tmpPreviewBuf = new Float32Array(2048 * 3);
     const renderLoop = () => {
+      // 视图状态（cx/cz/halfExtent）可能被平移/缩放/双击随时修改，每帧统一同步相机
+      applyCamera();
       const frame = session.frame;
       wrap.dataset.bev = `${view.cx.toFixed(1)},${view.cz.toFixed(1)},${view.halfExtent.toFixed(0)}`;
       // 诊断：画布中心的射线拾取结果
