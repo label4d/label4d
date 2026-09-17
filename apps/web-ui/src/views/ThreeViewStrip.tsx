@@ -63,11 +63,31 @@ export function ThreeViewStrip() {
       };
       canvas.addEventListener('pointerdown', onDown);
       canvas.addEventListener('pointerup', onUp);
+      let panDrag: { x: number; y: number } | null = null;
+      const onPanDown = (ev: MouseEvent) => {
+        if (ev.button === 1 || (ev.button === 0 && ev.shiftKey)) { panDrag = { x: ev.clientX, y: ev.clientY }; canvas.setPointerCapture((ev as unknown as PointerEvent).pointerId); }
+      };
+      const onPanMove = (ev: MouseEvent) => {
+        if (!panDrag) return;
+        const rect = canvas.getBoundingClientRect();
+        panel.panByFraction((ev.clientX - panDrag.x) / rect.width, (ev.clientY - panDrag.y) / rect.height);
+        panDrag = { x: ev.clientX, y: ev.clientY };
+      };
+      const onPanUp = () => { panDrag = null; };
+      const onWheel = (ev: WheelEvent) => { ev.preventDefault(); panel.zoomBy(Math.exp(-ev.deltaY * 0.0015)); };
+      canvas.addEventListener('pointerdown', onPanDown);
+      canvas.addEventListener('pointermove', onPanMove);
+      canvas.addEventListener('pointerup', onPanUp);
+      canvas.addEventListener('wheel', onWheel, { passive: false });
 
       cleanups.push(() => {
         observer.disconnect();
         canvas.removeEventListener('pointerdown', onDown);
         canvas.removeEventListener('pointerup', onUp);
+        canvas.removeEventListener('pointerdown', onPanDown);
+        canvas.removeEventListener('pointermove', onPanMove);
+        canvas.removeEventListener('pointerup', onPanUp);
+        canvas.removeEventListener('wheel', onWheel);
         panel.dispose();
         renderer.dispose();
       });

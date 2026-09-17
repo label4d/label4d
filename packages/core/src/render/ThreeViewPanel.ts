@@ -202,29 +202,50 @@ export class ThreeViewPanel {
   }
 
   fit(center: Vec3, halfExtent: number): void {
+    const half = halfExtent / this.userZoom;
+    const panX = this.userPanX * half;
+    const panY = this.userPanY * half;
     this.viewCenter = { ...center };
-    this.halfExtent = halfExtent;
-    // move the camera to look at the center along the view axis, then set a
-    // symmetric frustum — ortho l/r/t/b are view-space offsets, not world coords
+    this.halfExtent = half;
+    const adjusted = this.planeToWorld(center.x + panX, center.y + panY);
     if (this.axis === 'top') {
-      this.camera.position.set(center.x, 500, center.z);
+      this.camera.position.set(adjusted.x, 500, adjusted.z);
       this.camera.up.set(0, 0, -1);
-      this.camera.lookAt(center.x, 0, center.z);
+      this.camera.lookAt(adjusted.x, 0, adjusted.z);
     } else if (this.axis === 'front') {
-      this.camera.position.set(center.x, center.y, center.z + 500);
+      this.camera.position.set(adjusted.x, adjusted.y, adjusted.z + 500);
       this.camera.up.set(0, 1, 0);
-      this.camera.lookAt(center.x, center.y, center.z);
+      this.camera.lookAt(adjusted.x, adjusted.y, adjusted.z);
     } else {
-      this.camera.position.set(center.x + 500, center.y, center.z);
+      this.camera.position.set(adjusted.x + 500, adjusted.y, adjusted.z);
       this.camera.up.set(0, 1, 0);
-      this.camera.lookAt(center.x, center.y, center.z);
+      this.camera.lookAt(adjusted.x, adjusted.y, adjusted.z);
     }
-    this.camera.left = -halfExtent;
-    this.camera.right = halfExtent;
-    this.camera.top = halfExtent;
-    this.camera.bottom = -halfExtent;
+    this.camera.left = -half; this.camera.right = half;
+    this.camera.top = half; this.camera.bottom = -half;
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
+  }
+
+  zoomBy(factor: number): void {
+    this.userZoom = Math.max(0.5, Math.min(20, this.userZoom * factor));
+  }
+
+  panByFraction(dnx: number, dny: number): void {
+    this.userPanX -= dnx * 2 / this.userZoom;
+    this.userPanY -= dny * 2 / this.userZoom;
+  }
+
+  resetUserView(): void { this.userZoom = 1; this.userPanX = 0; this.userPanY = 0; }
+
+  private userZoom = 1;
+  private userPanX = 0;
+  private userPanY = 0;
+
+  private planeToWorld(px: number, py: number): Vec3 {
+    if (this.axis === 'top') return { x: px, y: 0, z: py };
+    if (this.axis === 'front') return { x: px, y: py, z: this.viewCenter.z };
+    return { x: this.viewCenter.x, y: py, z: px };
   }
 
   render(renderer: THREE.WebGLRenderer): void {
