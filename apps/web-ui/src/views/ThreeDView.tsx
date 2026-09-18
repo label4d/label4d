@@ -37,6 +37,9 @@ export function ThreeDView() {
     controls.target.set(0, 0, 0);
     controls.enableDamping = true;
     controls.dampingFactor = 0.12;
+    // 禁止相机钻到地面以下（否则看到"地面朝上"的倒立场景），侧看时保持俯视角
+    controls.minPolarAngle = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.08;
 
     const cloudView = new PointCloudFrameView();
     scene.add(cloudView.group);
@@ -208,10 +211,13 @@ export function ThreeDView() {
         }
       }
 
+      // 拼接环境点云：无论是否跟随，都按当前视点节流加载附近分块
+      if (potreeTick % 20 === 0) {
+        void overlay?.ensureAround(controls.target.x, controls.target.z, 130);
+      }
       if (followEnabled) {
         const ego = session.ego.positionAt(frame);
         controls.target.set(ego.x, 0, ego.z);
-        void overlay?.ensureAround(ego.x, ego.z, 120);
       }
       controls.update();
       renderer.render(scene, camera);

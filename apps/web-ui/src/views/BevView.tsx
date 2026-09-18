@@ -249,12 +249,13 @@ export function BevView() {
     let panLast: { x: number; y: number } | null = null;
     let rightPan: { x: number; y: number; moved: number } | null = null;
 
-    // 屏幕像素 -> 世界米平移（正交视口随 halfExtent/纵横比变化）
+    // 屏幕像素 -> 世界米平移（正交视口随 halfExtent/纵横比变化）。
+    // top 视图屏幕右=+X、屏幕下=+Z；内容跟手 = 相机反向移动
     const panView = (dx: number, dy: number) => {
       const rect = canvas.getBoundingClientRect();
       const aspect = rect.width / Math.max(1, rect.height);
       view.cx -= dx * ((2 * view.halfExtent * aspect) / rect.width);
-      view.cz += dy * ((2 * view.halfExtent) / rect.height);
+      view.cz -= dy * ((2 * view.halfExtent) / rect.height);
     };
 
     const onPointerDown = (e: PointerEvent) => {
