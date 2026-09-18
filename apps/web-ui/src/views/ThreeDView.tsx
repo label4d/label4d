@@ -105,7 +105,7 @@ export function ThreeDView() {
     const potreeGroup = new THREE.Group();
     potreeGroup.visible = true; // 默认显示，复选框控制开关
     scene.add(potreeGroup);
-    const potreeMaterial = new THREE.PointsMaterial({ size: 0.35, color: 0x8ec7e8, sizeAttenuation: true });
+    const potreeMaterial = new THREE.PointsMaterial({ size: 0.5, color: 0x4a90d9, sizeAttenuation: true, transparent: true, opacity: 0.85 });
     const potreeChunks = new Map<string, { points: THREE.Points; lastUse: number }>();
     let potreeEnabled = true; // 默认开启，复选框控制开关
     let potreeTick = 0;
