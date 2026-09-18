@@ -16,7 +16,7 @@ export function ThreeDView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(false);
-  const [potree, setPotree] = useState(false);
+  const [potree, setPotree] = useState(true); // 默认开启拼接点云
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -103,11 +103,11 @@ export function ThreeDView() {
 
     // Potree 静态八叉树 overlay：按视点流式调度，节点级 LRU 驻留
     const potreeGroup = new THREE.Group();
-    potreeGroup.visible = false;
+    potreeGroup.visible = true; // 默认显示，复选框控制开关
     scene.add(potreeGroup);
-    const potreeMaterial = new THREE.PointsMaterial({ size: 0.12, color: 0x9fd0ef, sizeAttenuation: true });
+    const potreeMaterial = new THREE.PointsMaterial({ size: 0.35, color: 0x8ec7e8, sizeAttenuation: true });
     const potreeChunks = new Map<string, { points: THREE.Points; lastUse: number }>();
-    let potreeEnabled = false;
+    let potreeEnabled = true; // 默认开启，复选框控制开关
     let potreeTick = 0;
     const disposeChunk = (points: THREE.Points) => {
       potreeGroup.remove(points);
@@ -181,10 +181,10 @@ export function ThreeDView() {
       instance.sync(frame, session.hover);
       badges.sync(frame, session.store, session.selection, session.hover);
 
-      // Potree overlay：节流请求视点附近节点，解码完成即挂到场景
+      // Potree overlay：按相机位置（不是注视点）加载附近节点
       if (potreeEnabled && session.potree && potreeTick++ % 12 === 0) {
-        const t = controls.target;
-        for (const { name, done } of session.potree.requestNear({ x: t.x, y: t.y, z: t.z }, 48, 12)) {
+        const camPos = camera.position;
+        for (const { name, done } of session.potree.requestNear({ x: camPos.x, y: camPos.y, z: camPos.z }, 128, 10)) {
           const cached = potreeChunks.get(name);
           if (cached) {
             cached.lastUse = potreeTick;
@@ -199,8 +199,8 @@ export function ThreeDView() {
             potreeChunks.set(name, { points, lastUse: potreeTick });
           });
         }
-        // 超出驻留上限时驱逐最久未用节点
-        const MAX_NODES = 96;
+        // 超出驻留上限时驱逐最久未用节点（给足余量，避免远端节点被立即驱逐）
+        const MAX_NODES = 200;
         if (potreeChunks.size > MAX_NODES) {
           const lru = [...potreeChunks.entries()].sort((a, b) => a[1].lastUse - b[1].lastUse);
           for (let k = 0; k < potreeChunks.size - MAX_NODES; k++) {
