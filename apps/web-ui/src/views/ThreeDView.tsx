@@ -43,6 +43,37 @@ export function ThreeDView() {
 
     const cloudView = new PointCloudFrameView();
     scene.add(cloudView.group);
+
+    // ---- 自车轨迹：连接线 + 每帧可点击定位标记（当前帧高亮）----
+    const egoGroup = new THREE.Group();
+    scene.add(egoGroup);
+    const egoLineMat = new THREE.LineBasicMaterial({ color: 0x3ddc97 });
+    const egoMarkerMat = new THREE.MeshBasicMaterial({ color: 0x2ea87e });
+    const egoMarkerHotMat = new THREE.MeshBasicMaterial({ color: 0x4dffce }); // 当前帧高亮
+    const markerGeo = new THREE.SphereGeometry(0.45, 12, 10);
+    const egoMarkers: THREE.Mesh[] = [];
+    let egoMarkersBuilt = false;
+    let lastEgoFrame = -1;
+    const buildEgoTrajectory = () => {
+      if (egoMarkersBuilt) return;
+      const n = session.ego.count;
+      if (n < 2) return;
+      const linePts: THREE.Vector3[] = [];
+      for (let f = 0; f < n; f++) {
+        const p = session.ego.positionAt(f);
+        linePts.push(new THREE.Vector3(p.x, p.y + 0.05, p.z));
+        const m = new THREE.Mesh(markerGeo, egoMarkerMat);
+        m.position.set(p.x, p.y + 0.05, p.z);
+        m.userData.frame = f; // 点击时按帧跳
+        egoGroup.add(m);
+        egoMarkers.push(m);
+      }
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(linePts);
+      egoGroup.add(new THREE.Line(lineGeo, egoLineMat));
+      egoMarkersBuilt = true;
+    };
+    buildEgoTrajectory();
+    session.events.on('manifestLoaded', buildEgoTrajectory);
     // 全局拼接点云（4D 序列静态环境）流式加载
     let overlay: WorldCloudOverlay | null = null;
     if (session.manifest && (session.manifest as { worldCloud?: { indexUrl: string } }).worldCloud) {
@@ -62,19 +93,23 @@ export function ThreeDView() {
     const ndc = new THREE.Vector2();
     const raycaster = new THREE.Raycaster();
 
-    const pickAt = (e: PointerEvent) => {
+    type PickResult = { egoFrame: number } | { id: string } | null;
+    const pickAt = (e: PointerEvent): PickResult => {
       const rect = canvas.getBoundingClientRect();
       ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(ndc, camera);
+      // 自车轨迹标记优先于标注框（定位导航优先）
+      const egoHit = raycaster.intersectObjects(egoMarkers, false)[0];
+      if (egoHit) return { egoFrame: egoHit.object.userData.frame as number };
       const badgeHit = badges.pick(raycaster);
-      if (badgeHit) return badgeHit;
+      if (badgeHit) return { id: badgeHit };
       const hit = session.pickTrackByRay(
         { x: raycaster.ray.origin.x, y: raycaster.ray.origin.y, z: raycaster.ray.origin.z },
         { x: raycaster.ray.direction.x, y: raycaster.ray.direction.y, z: raycaster.ray.direction.z },
         session.frame
       );
-      return hit?.id ?? null;
+      return hit ? { id: hit.id } : null;
     };
 
     let downAt: { x: number; y: number } | null = null;
@@ -86,13 +121,22 @@ export function ThreeDView() {
       const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
       downAt = null;
       if (moved > 4 || e.button !== 0) return;
-      const id = pickAt(e);
+      const hit = pickAt(e);
+      if (hit && 'egoFrame' in hit) {
+        // 点击自车轨迹标记：跳转到对应帧
+        session.setFrame(hit.egoFrame);
+        return;
+      }
+      const id = hit && 'id' in hit ? hit.id : null;
       if (id) session.selection.select([id], e.shiftKey ? 'toggle' : 'replace');
       else if (!e.shiftKey) session.selection.clear();
     };
     const onPointerMove = (e: PointerEvent) => {
       if (e.buttons !== 0) return;
-      session.setHover(pickAt(e));
+      const hit = pickAt(e);
+      // 悬停在轨迹标记上显示手型；标注框照常高亮
+      canvas.style.cursor = hit && 'egoFrame' in hit ? 'pointer' : '';
+      session.setHover(hit && 'id' in hit ? hit.id : null);
     };
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointerup', onPointerUp);
@@ -180,6 +224,12 @@ export function ThreeDView() {
       instance.fps = session.playhead.fps;
       instance.sync(frame, session.hover);
       badges.sync(frame, session.store, session.selection, session.hover);
+      // 当前帧轨迹标记高亮
+      if (frame !== lastEgoFrame && egoMarkers.length) {
+        if (egoMarkers[lastEgoFrame]) egoMarkers[lastEgoFrame].material = egoMarkerMat;
+        if (egoMarkers[frame]) egoMarkers[frame].material = egoMarkerHotMat;
+        lastEgoFrame = frame;
+      }
 
       // Potree overlay：按相机位置（不是注视点）加载附近节点
       if (potreeEnabled && session.potree && potreeTick++ % 12 === 0) {
@@ -241,6 +291,10 @@ export function ThreeDView() {
       for (const { points } of potreeChunks.values()) disposeChunk(points);
       potreeChunks.clear();
       potreeMaterial.dispose();
+      markerGeo.dispose();
+      egoLineMat.dispose();
+      egoMarkerMat.dispose();
+      egoMarkerHotMat.dispose();
       instance.dispose();
       badges.dispose();
       renderer.dispose();
