@@ -13,6 +13,8 @@ export interface FrameBufferOptions {
   budgetBytes?: number;
   /** scheduler request-id namespace; must be unique per buffer (pcd/image/...) */
   idPrefix?: string;
+  /** 序列总帧数：预取不得越过末尾帧，避免请求不存在的文件 */
+  frameCount?: number;
 }
 
 export interface FrameBufferStats {
@@ -48,6 +50,7 @@ export class FrameBuffer<T> {
   private readonly behind: number;
   private readonly budget: number;
   private readonly idPrefix: string;
+  private readonly frameCount: number | null;
 
   constructor(
     private readonly provider: FrameProvider<T>,
@@ -58,6 +61,7 @@ export class FrameBuffer<T> {
     this.behind = Math.max(0, options.windowBehind ?? 45);
     this.budget = options.budgetBytes ?? 512 * 1024 * 1024;
     this.idPrefix = options.idPrefix ?? 'frame';
+    this.frameCount = options.frameCount ?? null;
   }
 
   setFrame(frame: number): void {
@@ -94,8 +98,10 @@ export class FrameBuffer<T> {
     if (inFlight) return inFlight;
     const distance = this.current >= 0 ? Math.abs(frame - this.current) : 0;
     const priority = -distance;
+    // 体积估算（PCD ~60k 点 × 16B ≈ 1MB），调度器字节预算据此记账
+    const estimate = 1 * 1024 * 1024;
     const promise = this.scheduler
-      .request<T>(this.frameId(frame), priority, 0, () => this.provider.load(frame))
+      .request<T>(this.frameId(frame), priority, estimate, () => this.provider.load(frame))
       .then((item) => {
         const bytes = this.provider.bytes(item);
         this.cache.set(frame, { item, bytes });
@@ -139,9 +145,10 @@ export class FrameBuffer<T> {
   }
 
   private prefetch(): void {
+    const lastFrame = this.frameCount !== null ? this.frameCount - 1 : Infinity;
     for (let d = -this.behind; d <= this.ahead; d++) {
       const frame = this.current + d;
-      if (frame < 0) continue;
+      if (frame < 0 || frame > lastFrame) continue;
       if (this.cache.has(frame) || this.pending.has(frame)) continue;
       this.ensure(frame).catch(() => undefined); // failures surface via events
     }
@@ -166,7 +173,8 @@ export class FrameBuffer<T> {
       this.cache.delete(frame);
       this.totalBytes -= entry.bytes;
       this.provider.dispose(entry.item);
-      this.scheduler.cancel(this.frameId(frame));
+      // release 释放已加载资源（cancel 只管排队/运行中，对已加载无效）
+      this.scheduler.release(this.frameId(frame));
       this.evictionCount++;
       this.events.emit('evicted', { frame });
     }

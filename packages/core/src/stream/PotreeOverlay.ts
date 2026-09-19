@@ -216,23 +216,32 @@ export class PotreeOverlay {
    * 保证整条轨迹都有可见覆盖。level 上限随距离增大而收紧。
    */
   requestView(camera: Vec3, maxNodes = 160): Array<{ name: string; done: Promise<PotreeDecodedChunk> }> {
-    const scored: Array<{ node: PotreeNode; dist: number; levelCap: number }> = [];
+    // 1) 全局概览常驻：level ≤2 的粗层级无条件优先（约 40 节点，覆盖整幅场景）
+    const pinned: PotreeNode[] = [];
     for (const node of this.nodes.values()) {
       if (node.isProxy || node.numPoints === 0) continue;
+      if (node.level <= 2) pinned.push(node);
+    }
+    const pinnedNames = new Set(pinned.map((n) => n.name));
+
+    // 2) 剩余名额按“近处细粒度、远处概览级”分级填充
+    const scored: Array<{ node: PotreeNode; dist: number }> = [];
+    for (const node of this.nodes.values()) {
+      if (node.isProxy || node.numPoints === 0 || pinnedNames.has(node.name)) continue;
       const dist = this.nodeDistance(node, camera);
       // 距离越远，允许加载的层级越低（越粗），确保远处也有内容
       const levelCap = dist < 30 ? 10 : dist < 80 ? 8 : dist < 160 ? 6 : dist < 320 ? 4 : 2;
       if (node.level > levelCap) continue;
-      scored.push({ node, dist, levelCap });
+      scored.push({ node, dist });
     }
     scored.sort((a, b) => a.dist - b.dist);
-    const picked = scored.slice(0, maxNodes);
-    return picked.map(({ node, dist }) => ({
+    const picked = [...pinned, ...scored.map((s) => s.node).slice(0, Math.max(0, maxNodes - pinned.length))];
+    return picked.map((node) => ({
       name: node.name,
       done: this.scheduler
         .request<PotreeDecodedChunk>(
           `potree:${node.name}`,
-          -dist,
+          -this.nodeDistance(node, camera),
           node.byteSize,
           () => this.loadNode(node)
         )

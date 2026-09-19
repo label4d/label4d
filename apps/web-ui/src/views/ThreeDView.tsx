@@ -73,10 +73,11 @@ export function ThreeDView() {
       egoMarkersBuilt = true;
     };
     buildEgoTrajectory();
-    session.events.on('manifestLoaded', buildEgoTrajectory);
+    const offEgo = session.events.on('manifestLoaded', buildEgoTrajectory);
     // 全局拼接点云（4D 序列静态环境）流式加载
     // manifest 异步到达：挂载时可能未就绪，manifestLoaded 事件补初始化
     let overlay: WorldCloudOverlay | null = null;
+    let disposed = false;
     const ensureWorldOverlay = () => {
       const manifest = session.manifest as { worldCloud?: { indexUrl: string } } | null;
       if (overlay || !manifest?.worldCloud) return;
@@ -84,10 +85,10 @@ export function ThreeDView() {
         fetch(url).then((r) => r.arrayBuffer())
       );
       scene.add(overlay.group);
-      void overlay.load(manifest.worldCloud.indexUrl).then(() => overlay && (overlay.enabled = true));
+      void overlay.load(manifest.worldCloud.indexUrl).then(() => { if (!disposed && overlay) overlay.enabled = true; });
     };
     ensureWorldOverlay();
-    session.events.on('manifestLoaded', ensureWorldOverlay);
+    const offOverlay = session.events.on('manifestLoaded', ensureWorldOverlay);
     const instance = new TrackInstanceRenderer(session.store, session.selection, session.labels);
     scene.add(instance.group);
     const badges = new AttributeBadgeRenderer(session.labels);
@@ -244,7 +245,7 @@ export function ThreeDView() {
             continue;
           }
           void done.then((chunk) => {
-            if (!potreeEnabled || !chunk.count || potreeChunks.has(name)) return;
+            if (disposed || !potreeEnabled || !chunk.count || potreeChunks.has(name)) return;
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.BufferAttribute(chunk.positions, 3));
             const points = new THREE.Points(geometry, potreeMaterial);
@@ -288,6 +289,9 @@ export function ThreeDView() {
       window.removeEventListener('lf:potree', onPotreeToggle);
       window.removeEventListener('lf:follow', onFollow);
       offManifest();
+      offEgo();
+      offOverlay();
+      disposed = true;
       controls.dispose();
       cloudView.dispose();
       if (overlay) overlay.dispose();

@@ -46,15 +46,16 @@ export class PointCloudFrameView {
   }
 
   setFrame(geo: PointCloudFrame | null, frame: number): void {
+    // 新帧未就绪时保留旧点云，避免切帧空窗闪烁；只有拿到数据才替换
+    if (!geo || geo.count === 0) return;
     if (frame === this.currentFrame && geo === this.frameBuffer) return;
-    this.currentFrame = geo ? frame : this.currentFrame;
+    this.currentFrame = frame;
     this.frameBuffer = geo;
     if (this.points) {
       this.group.remove(this.points);
       this.points.geometry.dispose();
       this.points = null;
     }
-    if (!geo || geo.count === 0) return;
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(geo.positions, 3));
