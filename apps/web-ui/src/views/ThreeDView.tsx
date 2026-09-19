@@ -79,6 +79,12 @@ export function ThreeDView() {
     // manifest 异步到达：挂载时可能未就绪，manifestLoaded 事件补初始化
     let overlay: WorldCloudOverlay | null = null;
     let disposed = false;
+    (window as unknown as { __lfPotreeDebug?: unknown }).__lfPotreeDebug = {
+      setLayerMode: (m: string) => { dbgRef.current.layerMode = m as typeof dbgLayerMode; dbgLayerMode = m as typeof dbgLayerMode; },
+      setNodeColor: (v: boolean) => { dbgRef.current.nodeColor = v; dbgNodeColor = v; },
+      setShowBounds: (v: boolean) => { dbgRef.current.showBounds = v; dbgShowBounds = v; boundsGroup.visible = v; },
+      getStats: () => ({ loaded: potreeChunks.size, nodes: [...potreeChunks.keys()] }),
+    };
     const ensureWorldOverlay = () => {
       const manifest = session.manifest as { worldCloud?: { indexUrl: string } } | null;
       if (overlay || !manifest?.worldCloud) return;
@@ -154,11 +160,37 @@ export function ThreeDView() {
     const potreeGroup = new THREE.Group();
     potreeGroup.visible = true; // 默认显示，复选框控制开关
     scene.add(potreeGroup);
+    // 调试：层级对照与节点可视化
+    const dbgRef = { current: { layerMode: 'all' as 'all' | 'coarse' | 'detail', nodeColor: false, showBounds: false } };
+    let dbgLayerMode: 'all' | 'coarse' | 'detail' = 'all'; // all=全显示, coarse=只level≤2, detail=只细节
+    dbgRef.current = { layerMode: 'all', nodeColor: false, showBounds: false };
+    let dbgNodeColor = false;   // 按节点随机着色
+    let dbgShowBounds = false;  // 画节点包围盒
+    const boundsGroup = new THREE.Group();
+    boundsGroup.visible = false;
+    scene.add(boundsGroup);
+    const nodeColors = new Map<string, THREE.Color>();
+    const randomNodeColor = (name: string) => {
+      let c = nodeColors.get(name);
+      if (!c) {
+        c = new THREE.Color().setHSL((name.length * 137.5 % 360) / 360, 0.7, 0.55);
+        nodeColors.set(name, c);
+      }
+      return c;
+    };
+
     const potreeMaterial = createCloudShaderMaterial({
       mode: 0,               // 高度着色（源数据强度全 0，不可用）
-      range: [-3, 10],       // 全局统一色域，避免分块边界
+      range: [-2, 4],        // 贴合实际高度分布（p5≈-1.2, p95≈1.4），避免大面积落进粉紫过渡区
       pointSize: 0.12,
+      lowColor: '#2a2d33',   // 低值暗灰
+      highColor: '#e8e8e8',  // 高值亮白
     });
+    // 按层级预建点尺寸：粗层（概览）小点避免实心圆斑，细层略大保证连续覆盖
+    const LEVEL_SIZES = [0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12, 0.12, 0.12, 0.12, 0.12];
+    const levelMaterials = LEVEL_SIZES.map((size) =>
+      createCloudShaderMaterial({ mode: 0, range: [-2, 4], pointSize: size, lowColor: '#2a2d33', highColor: '#e8e8e8' })
+    );
     const potreeChunks = new Map<string, { points: THREE.Points; lastUse: number }>();
     let potreeEnabled = true; // 默认开启，复选框控制开关
     let potreeTick = 0;
@@ -243,7 +275,10 @@ export function ThreeDView() {
       // Potree overlay：按相机位置+距离分级加载，保证整条轨迹都有可见覆盖
       if (potreeEnabled && session.potree && potreeTick++ % 12 === 0) {
         const camPos = camera.position;
-        for (const { name, done } of session.potree.requestView({ x: camPos.x, y: camPos.y, z: camPos.z }, 160)) {
+        for (const { name, level, done } of session.potree.requestView({ x: camPos.x, y: camPos.y, z: camPos.z }, 160)) {
+          // 分层对照：按模式过滤显示的节点
+          if (dbgRef.current.layerMode === 'coarse' && level > 2) continue;
+          if (dbgRef.current.layerMode === 'detail' && level <= 2) continue;
           const cached = potreeChunks.get(name);
           if (cached) {
             cached.lastUse = potreeTick;
@@ -253,9 +288,31 @@ export function ThreeDView() {
             if (disposed || !potreeEnabled || !chunk.count || potreeChunks.has(name)) return;
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.BufferAttribute(chunk.positions, 3));
-            const points = new THREE.Points(geometry, potreeMaterial);
+            // 调试：按节点着色（覆盖默认材质）
+            let material: THREE.Material;
+            if (dbgRef.current.nodeColor) {
+              material = new THREE.PointsMaterial({ size: 0.12, color: randomNodeColor(name), sizeAttenuation: true });
+            } else {
+              material = levelMaterials[Math.min(level, LEVEL_SIZES.length - 1)] ?? potreeMaterial;
+            }
+            const points = new THREE.Points(geometry, material);
+            points.userData.level = level;
+            points.userData.nodeName = name;
             potreeGroup.add(points);
             potreeChunks.set(name, { points, lastUse: potreeTick });
+            // 调试：画节点包围盒
+            if (dbgRef.current.showBounds && session.potree) {
+              const node = session.potree.nodes.get(name);
+              if (node) {
+                const box = new THREE.Box3(
+                  new THREE.Vector3(node.boxMin.x, node.boxMin.y, node.boxMin.z),
+                  new THREE.Vector3(node.boxMax.x, node.boxMax.y, node.boxMax.z)
+                );
+                const helper = new THREE.Box3Helper(box, 0xffff00);
+                boundsGroup.add(helper);
+                points.userData.boundsHelper = helper;
+              }
+            }
           });
         }
         // 超出驻留上限时驱逐最久未用节点（给足余量，避免远端节点被立即驱逐）
@@ -303,6 +360,7 @@ export function ThreeDView() {
       for (const { points } of potreeChunks.values()) disposeChunk(points);
       potreeChunks.clear();
       potreeMaterial.dispose();
+      for (const m of levelMaterials) m.dispose();
       markerGeo.dispose();
       egoLineMat.dispose();
       egoMarkerMat.dispose();

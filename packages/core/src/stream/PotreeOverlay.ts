@@ -215,7 +215,7 @@ export class PotreeOverlay {
    * 按屏幕空间收益调度：近处细粒度、远处概览级，保证整条轨迹有可见覆盖；
    * 同一距离环内的层级收敛，避免相邻区域密度/大小跳变。
    */
-  requestView(camera: Vec3, maxNodes = 160): Array<{ name: string; done: Promise<PotreeDecodedChunk> }> {
+  requestView(camera: Vec3, maxNodes = 160): Array<{ name: string; level: number; done: Promise<PotreeDecodedChunk> }> {
     // 1) 全局概览常驻：level ≤2 的粗层级无条件优先（约 40 节点，覆盖整幅场景）
     const pinned: PotreeNode[] = [];
     for (const node of this.nodes.values()) {
@@ -243,6 +243,7 @@ export class PotreeOverlay {
     const picked = [...pinned, ...candidates.map((c) => c.node).slice(0, Math.max(0, maxNodes - pinned.length))];
     return picked.map((node) => ({
       name: node.name,
+      level: node.level,
       done: this.scheduler
         .request<PotreeDecodedChunk>(
           `potree:${node.name}`,
