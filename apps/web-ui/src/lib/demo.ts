@@ -195,7 +195,7 @@ export const demoNet: NetClient = {
     if (url.startsWith('demo://')) return demoEgoPoses();
     return fetch(url).then((r) => r.json());
   },
-  async fetchBinary(url) {
+  async fetchBinary(url, init) {
     if (url.startsWith('demo://pointcloud/')) {
       const frame = parseInt(url.split('/').pop() ?? '0', 10) || 0;
       let frameData = frameCache.get(frame);
@@ -206,7 +206,8 @@ export const demoNet: NetClient = {
       }
       return encodeBinaryPcd(frameData);
     }
-    return fetch(url).then((r) => r.arrayBuffer());
+    // 必须透传 init（Potree 节点按 Range 字节段取 octree.bin）
+    return fetch(url, init).then((r) => r.arrayBuffer());
   },
 };
 

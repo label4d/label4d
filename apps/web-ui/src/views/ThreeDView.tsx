@@ -75,16 +75,19 @@ export function ThreeDView() {
     buildEgoTrajectory();
     session.events.on('manifestLoaded', buildEgoTrajectory);
     // 全局拼接点云（4D 序列静态环境）流式加载
+    // manifest 异步到达：挂载时可能未就绪，manifestLoaded 事件补初始化
     let overlay: WorldCloudOverlay | null = null;
-    if (session.manifest && (session.manifest as { worldCloud?: { indexUrl: string } }).worldCloud) {
+    const ensureWorldOverlay = () => {
+      const manifest = session.manifest as { worldCloud?: { indexUrl: string } } | null;
+      if (overlay || !manifest?.worldCloud) return;
       overlay = new WorldCloudOverlay((url) =>
         fetch(url).then((r) => r.arrayBuffer())
       );
       scene.add(overlay.group);
-      void overlay
-        .load((session.manifest as unknown as { worldCloud: { indexUrl: string } }).worldCloud.indexUrl)
-        .then(() => overlay && (overlay.enabled = true));
-    }
+      void overlay.load(manifest.worldCloud.indexUrl).then(() => overlay && (overlay.enabled = true));
+    };
+    ensureWorldOverlay();
+    session.events.on('manifestLoaded', ensureWorldOverlay);
     const instance = new TrackInstanceRenderer(session.store, session.selection, session.labels);
     scene.add(instance.group);
     const badges = new AttributeBadgeRenderer(session.labels);

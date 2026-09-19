@@ -37,7 +37,8 @@ export class WorldCloudOverlay {
   }
 
   private abs(url: string): string {
-    return this.baseUrl + url.replace(/^world\//, 'world/');
+    // index.json 里的路径已含 "world/" 前缀，剥离避免 kitti/world/world/... 重复
+    return this.baseUrl + url.replace(/^world\//, '');
   }
 
   private fetchJson(url: string): Promise<unknown> {
