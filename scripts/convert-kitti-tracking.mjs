@@ -110,36 +110,35 @@ function applyMat(m, x, y, z) {
 }
 
 // axis map: ENU/imu-axes (x fwd, y left, z up) -> engine (x fwd, y up, z right)
+// 列主序读取：(x,y,z) → (x, z, -y)，ENU 的 +Z（上）映射为引擎的 +Y（上）
 const AXIS_MAP = [
   1, 0, 0, 0,
-  0, 0, 1, 0,
-  0, -1, 0, 0,
+  0, 0, -1, 0,
+  0, 1, 0, 0,
   0, 0, 0, 1,
 ];
 const AXIS_MAP_INV = mat4Invert(AXIS_MAP);
 
 // ---------- oxts -> ENU poses (KITTI devkit Mercator convention) ----------
 function oxtsToPoses(files, oxtsDirPath) {
-  const er = 6378137;
-  const ep = 6356752.3142;
-  const ecc = Math.sqrt(er * er - ep * ep) / er;
+  const er = 6378137; // 地球半径（WGS84 半长轴，KITTI devkit 约定）
   const rows = files.map((f) => readFileSync(join(oxtsDirPath, f), 'utf8').trim().split(/\s+/).map(Number));
-  const scale = Math.cos((rows[0][0] * Math.PI) / 180);
+  const scale = Math.cos((rows[0][0] * Math.PI) / 180); // 首帧纬度的余弦作为 Mercator 缩放
   const poses = [];
   let x0 = 0, y0 = 0, z0 = 0;
   rows.forEach((r, i) => {
     const [lat, lon, alt, roll, pitch, yaw] = r;
     const latR = (lat * Math.PI) / 180;
     const lonR = (lon * Math.PI) / 180;
-    const rm = er / Math.sqrt(1 - ecc * ecc * Math.sin(latR) ** 2);
-    const x = rm * scale * lonR;
-    const y = rm * Math.log(Math.tan(Math.PI / 4 + latR / 2));
+    // KITTI devkit: east = er·scale·lon, north = er·scale·log(tan(π/4+lat/2))
+    const x = er * scale * lonR;
+    const y = er * scale * Math.log(Math.tan(Math.PI / 4 + latR / 2));
     const z = alt;
     if (i === 0) { x0 = x; y0 = y; z0 = z; }
-    const d2r = Math.PI / 180;
-    const cr = Math.cos(roll * d2r), sr = Math.sin(roll * d2r);
-    const cp = Math.cos(pitch * d2r), sp = Math.sin(pitch * d2r);
-    const cy = Math.cos(yaw * d2r), sy = Math.sin(yaw * d2r);
+    // OXTS roll/pitch/yaw 已是弧度（dataformat.txt 明确），不得再乘 π/180
+    const cr = Math.cos(roll), sr = Math.sin(roll);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
     // R = Rz(yaw) * Ry(pitch) * Rx(roll)
     const R = [
       cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr,
