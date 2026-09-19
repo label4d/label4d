@@ -19,7 +19,7 @@ export class WorldCloudOverlay {
   private cells = new Map<string, { points: THREE.Points; lastUse: number }>();
   private pending = new Set<string>();
   private clock = 0;
-  maxCells = 90;
+  maxCells = 128;
   enabled = false;
 
   constructor(private fetchBinary: (url: string) => Promise<ArrayBuffer>) {}
@@ -49,12 +49,21 @@ export class WorldCloudOverlay {
     if (!this.index || !this.enabled) return;
     this.clock++;
     const { cellSize, cells } = this.index;
+    const needed = new Set<string>();
     for (const cell of cells) {
       const ccx = (cell.cx + 0.5) * cellSize + this.index.bounds.minX;
       const ccz = (cell.cz + 0.5) * cellSize + this.index.bounds.minZ;
       const dist = Math.hypot(ccx - x, ccz - z);
       const key = `${cell.cx}_${cell.cz}`;
-      if (dist <= radius && !this.cells.has(key) && !this.pending.has(key)) {
+      if (dist <= radius) {
+        needed.add(key);
+        const existing = this.cells.get(key);
+        if (existing) {
+          // 本轮仍需要的分块：更新 lastUse，避免被本轮驱逐误伤
+          existing.lastUse = this.clock;
+          continue;
+        }
+        if (this.pending.has(key)) continue;
         this.pending.add(key);
         const file = cell.file;
         this.fetchBinary(this.abs(file))
@@ -72,6 +81,15 @@ export class WorldCloudOverlay {
           })
           .catch(() => undefined)
           .finally(() => this.pending.delete(key));
+      }
+    }
+    // 驱逐不在本轮需要集合的分块；数量超上限时再按 LRU 兜底
+    for (const [key, entry] of this.cells) {
+      if (!needed.has(key)) {
+        this.group.remove(entry.points);
+        entry.points.geometry.dispose();
+        (entry.points.material as THREE.Material).dispose();
+        this.cells.delete(key);
       }
     }
   }
