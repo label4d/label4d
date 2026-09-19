@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   AttributeBadgeRenderer,
+  createCloudShaderMaterial,
   PointCloudFrameView,
   TrackInstanceRenderer,
   WorldCloudOverlay,
@@ -153,7 +154,11 @@ export function ThreeDView() {
     const potreeGroup = new THREE.Group();
     potreeGroup.visible = true; // 默认显示，复选框控制开关
     scene.add(potreeGroup);
-    const potreeMaterial = new THREE.PointsMaterial({ size: 0.35, color: 0xffffff, sizeAttenuation: true });
+    const potreeMaterial = createCloudShaderMaterial({
+      mode: 0,               // 高度着色（源数据强度全 0，不可用）
+      range: [-3, 10],       // 全局统一色域，避免分块边界
+      pointSize: 0.12,
+    });
     const potreeChunks = new Map<string, { points: THREE.Points; lastUse: number }>();
     let potreeEnabled = true; // 默认开启，复选框控制开关
     let potreeTick = 0;
