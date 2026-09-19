@@ -31,7 +31,7 @@ export class WorldCloudOverlay {
     const buf = new Float32Array(await (await this.fetchBinary(this.abs(index.overview.url))).slice(0));
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(buf, 3));
-    const material = new THREE.PointsMaterial({ size: 0.18, color: 0x5b7fa6, sizeAttenuation: true });
+    const material = new THREE.PointsMaterial({ size: 0.18, color: 0xffffff, sizeAttenuation: true });
     this.overview = new THREE.Points(geometry, material);
     this.group.add(this.overview);
   }
@@ -73,7 +73,7 @@ export class WorldCloudOverlay {
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             const points = new THREE.Points(
               geometry,
-              new THREE.PointsMaterial({ size: 0.1, color: 0xbfd8ff, sizeAttenuation: true })
+              new THREE.PointsMaterial({ size: 0.1, color: 0xffffff, sizeAttenuation: true })
             );
             this.cells.set(key, { points, lastUse: this.clock++ });
             this.group.add(points);
