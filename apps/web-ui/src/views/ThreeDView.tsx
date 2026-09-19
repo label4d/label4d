@@ -84,6 +84,11 @@ export function ThreeDView() {
       setNodeColor: (v: boolean) => { dbgRef.current.nodeColor = v; dbgNodeColor = v; },
       setShowBounds: (v: boolean) => { dbgRef.current.showBounds = v; dbgShowBounds = v; boundsGroup.visible = v; },
       getStats: () => ({ loaded: potreeChunks.size, nodes: [...potreeChunks.keys()] }),
+      setFixedPixel: (v: boolean) => { dbgRef.current.fixedPixel = v; },
+      setSampleRatio: (v: number) => { dbgRef.current.sampleRatio = v; },
+      setCloudVisible: (v: boolean) => { cloudView.group.visible = v; },
+      setAnnotationsVisible: (v: boolean) => { instance.group.visible = v; },
+      setEgoVisible: (v: boolean) => { egoGroup.visible = v; },
     };
     const ensureWorldOverlay = () => {
       const manifest = session.manifest as { worldCloud?: { indexUrl: string } } | null;
@@ -161,9 +166,9 @@ export function ThreeDView() {
     potreeGroup.visible = true; // 默认显示，复选框控制开关
     scene.add(potreeGroup);
     // 调试：层级对照与节点可视化
-    const dbgRef = { current: { layerMode: 'all' as 'all' | 'coarse' | 'detail', nodeColor: false, showBounds: false } };
+    const dbgRef = { current: { layerMode: 'all' as 'all' | 'coarse' | 'detail', nodeColor: false, showBounds: false, fixedPixel: false, sampleRatio: 0.15 } };
     let dbgLayerMode: 'all' | 'coarse' | 'detail' = 'all'; // all=全显示, coarse=只level≤2, detail=只细节
-    dbgRef.current = { layerMode: 'all', nodeColor: false, showBounds: false };
+    dbgRef.current = { layerMode: 'all', nodeColor: false, showBounds: false, fixedPixel: false, sampleRatio: 0.15 };
     let dbgNodeColor = false;   // 按节点随机着色
     let dbgShowBounds = false;  // 画节点包围盒
     const boundsGroup = new THREE.Group();
@@ -179,6 +184,17 @@ export function ThreeDView() {
       return c;
     };
 
+    // 调试用 1px 固定像素点材质（同样高度着色）
+    const potreeMaterial1px = createCloudShaderMaterial({
+      mode: 0, range: [-2, 4], pointSize: 1.0,
+      lowColor: '#2a2d33', highColor: '#e8e8e8',
+    });
+    potreeMaterial1px.vertexShader = potreeMaterial1px.vertexShader.replace(
+      'gl_PointSize = uPointSize * (300.0 / max(-viewPosition.z, 1.0));',
+      'gl_PointSize = uPointSize;'
+    );
+    potreeMaterial1px.uniforms.uPointSize.value = 1.0;
+    potreeMaterial1px.needsUpdate = true;
     const potreeMaterial = createCloudShaderMaterial({
       mode: 0,               // 高度着色（源数据强度全 0，不可用）
       range: [-2, 4],        // 贴合实际高度分布（p5≈-1.2, p95≈1.4），避免大面积落进粉紫过渡区
@@ -286,15 +302,32 @@ export function ThreeDView() {
           }
           void done.then((chunk) => {
             if (disposed || !potreeEnabled || !chunk.count || potreeChunks.has(name)) return;
-            const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.BufferAttribute(chunk.positions, 3));
             // 调试：按节点着色（覆盖默认材质）
             let material: THREE.Material;
             if (dbgRef.current.nodeColor) {
               material = new THREE.PointsMaterial({ size: 0.12, color: randomNodeColor(name), sizeAttenuation: true });
+            } else if (dbgRef.current.fixedPixel) {
+              material = potreeMaterial1px;
             } else {
               material = levelMaterials[Math.min(level, LEVEL_SIZES.length - 1)] ?? potreeMaterial;
             }
+            // 调试：均匀抽样（非数组开头，按步长取）
+            let positions = chunk.positions;
+            let count = chunk.count;
+            const sr = dbgRef.current.sampleRatio;
+            if (sr < 1 && count > 0) {
+              const step = Math.max(1, Math.round(1 / sr));
+              const n = Math.ceil(count / step);
+              positions = new Float32Array(n * 3);
+              for (let i = 0, j = 0; i < count; i += step, j++) {
+                positions[j * 3] = chunk.positions[i * 3];
+                positions[j * 3 + 1] = chunk.positions[i * 3 + 1];
+                positions[j * 3 + 2] = chunk.positions[i * 3 + 2];
+              }
+              count = n;
+            }
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             const points = new THREE.Points(geometry, material);
             points.userData.level = level;
             points.userData.nodeName = name;
