@@ -206,21 +206,33 @@ export class PotreeOverlay {
     void offset;
   }
 
+  /** 请求距 `center` 最近的最多 `maxNodes` 个节点（旧接口，保留兼容）。 */
+  requestNear(center: Vec3, maxNodes = 96): Array<{ name: string; done: Promise<PotreeDecodedChunk> }> {
+    return this.requestView(center, maxNodes);
+  }
+
   /**
-   * 请求距 `center` 最近的最多 `maxNodes` 个节点（可按层级过滤），
-   * 经统一 TileScheduler 调度加载解码。重复请求同节点命中调度缓存。
+   * 按屏幕空间收益调度：近处加载细粒度节点（高层级），远处加载概览级节点，
+   * 保证整条轨迹都有可见覆盖。level 上限随距离增大而收紧。
    */
-  requestNear(center: Vec3, maxNodes = 64, maxLevel = Infinity): Array<{ name: string; done: Promise<PotreeDecodedChunk> }> {
-    const candidates = [...this.nodes.values()]
-      .filter((n) => !n.isProxy && n.numPoints > 0 && n.level <= maxLevel)
-      .sort((a, b) => this.nodeDistance(a, center) - this.nodeDistance(b, center))
-      .slice(0, maxNodes);
-    return candidates.map((node) => ({
+  requestView(camera: Vec3, maxNodes = 160): Array<{ name: string; done: Promise<PotreeDecodedChunk> }> {
+    const scored: Array<{ node: PotreeNode; dist: number; levelCap: number }> = [];
+    for (const node of this.nodes.values()) {
+      if (node.isProxy || node.numPoints === 0) continue;
+      const dist = this.nodeDistance(node, camera);
+      // 距离越远，允许加载的层级越低（越粗），确保远处也有内容
+      const levelCap = dist < 30 ? 10 : dist < 80 ? 8 : dist < 160 ? 6 : dist < 320 ? 4 : 2;
+      if (node.level > levelCap) continue;
+      scored.push({ node, dist, levelCap });
+    }
+    scored.sort((a, b) => a.dist - b.dist);
+    const picked = scored.slice(0, maxNodes);
+    return picked.map(({ node, dist }) => ({
       name: node.name,
       done: this.scheduler
         .request<PotreeDecodedChunk>(
           `potree:${node.name}`,
-          -this.nodeDistance(node, center),
+          -dist,
           node.byteSize,
           () => this.loadNode(node)
         )

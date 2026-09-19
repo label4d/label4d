@@ -231,10 +231,10 @@ export function ThreeDView() {
         lastEgoFrame = frame;
       }
 
-      // Potree overlay：按相机位置（不是注视点）加载附近节点
+      // Potree overlay：按相机位置+距离分级加载，保证整条轨迹都有可见覆盖
       if (potreeEnabled && session.potree && potreeTick++ % 12 === 0) {
         const camPos = camera.position;
-        for (const { name, done } of session.potree.requestNear({ x: camPos.x, y: camPos.y, z: camPos.z }, 128, 10)) {
+        for (const { name, done } of session.potree.requestView({ x: camPos.x, y: camPos.y, z: camPos.z }, 160)) {
           const cached = potreeChunks.get(name);
           if (cached) {
             cached.lastUse = potreeTick;
