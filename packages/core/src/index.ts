@@ -115,3 +115,6 @@ export { EditorSession } from './session/EditorSession';
 export type { SessionEvents, SessionDeps } from './session/EditorSession';
 export { WorldCloudOverlay } from './render/WorldCloudOverlay';
 export type { WorldCloudIndex } from './render/WorldCloudOverlay';
+
+export { selectPotreeNodes, stablePointOrder } from './stream/PotreeSelection';
+export type { PotreeViewOptions, PotreeSelection } from './stream/PotreeSelection';

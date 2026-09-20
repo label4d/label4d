@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   AttributeBadgeRenderer,
   createCloudShaderMaterial,
+  stablePointOrder,
   PointCloudFrameView,
   TrackInstanceRenderer,
   WorldCloudOverlay,
@@ -17,6 +18,8 @@ export function ThreeDView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(false);
+  const [density, setDensity] = useState(2);
+  const densityRef = useRef(2);
   const [potree, setPotree] = useState(true); // 默认开启拼接点云
 
   useEffect(() => {
@@ -79,17 +82,25 @@ export function ThreeDView() {
     // manifest 异步到达：挂载时可能未就绪，manifestLoaded 事件补初始化
     let overlay: WorldCloudOverlay | null = null;
     let disposed = false;
-    (window as unknown as { __lfPotreeDebug?: unknown }).__lfPotreeDebug = {
+    const potreeDebug = {
       setLayerMode: (m: string) => { dbgRef.current.layerMode = m as typeof dbgLayerMode; dbgLayerMode = m as typeof dbgLayerMode; },
       setNodeColor: (v: boolean) => { dbgRef.current.nodeColor = v; dbgNodeColor = v; },
       setShowBounds: (v: boolean) => { dbgRef.current.showBounds = v; dbgShowBounds = v; boundsGroup.visible = v; },
-      getStats: () => ({ loaded: potreeChunks.size, nodes: [...potreeChunks.keys()] }),
+      getStats: () => ({ loaded: potreeChunks.size, pending: pendingNodes.size,
+        selected: desired.size, pointBudget: selectedBudget,
+        drawn: [...potreeChunks.values()].reduce((sum, e) => sum + (e.points.visible ? e.points.geometry.drawRange.count : 0), 0),
+        nodes: [...potreeChunks.keys()], camera: camera.position.toArray(),
+        visibleNodes: [...potreeChunks].filter(([, e]) => e.points.visible).map(([name]) => name),
+        selectedNodes: [...desired.keys()],
+        gpuBytes: [...potreeChunks.values()].reduce((sum, e) => sum + e.bytes, 0),
+      }),
       setFixedPixel: (v: boolean) => { dbgRef.current.fixedPixel = v; },
       setSampleRatio: (v: number) => { dbgRef.current.sampleRatio = v; },
       setCloudVisible: (v: boolean) => { cloudView.group.visible = v; },
       setAnnotationsVisible: (v: boolean) => { instance.group.visible = v; },
       setEgoVisible: (v: boolean) => { egoGroup.visible = v; },
     };
+    (window as unknown as { __lfPotreeDebug?: unknown }).__lfPotreeDebug = potreeDebug;
     const ensureWorldOverlay = () => {
       const manifest = session.manifest as { worldCloud?: { indexUrl: string } } | null;
       if (overlay || !manifest?.worldCloud) return;
@@ -166,9 +177,9 @@ export function ThreeDView() {
     potreeGroup.visible = true; // 默认显示，复选框控制开关
     scene.add(potreeGroup);
     // 调试：层级对照与节点可视化
-    const dbgRef = { current: { layerMode: 'all' as 'all' | 'coarse' | 'detail', nodeColor: false, showBounds: false, fixedPixel: false, sampleRatio: 0.15 } };
+    const dbgRef = { current: { layerMode: 'all' as 'all' | 'coarse' | 'detail', nodeColor: false, showBounds: false, fixedPixel: true, sampleRatio: 1 } };
     let dbgLayerMode: 'all' | 'coarse' | 'detail' = 'all'; // all=全显示, coarse=只level≤2, detail=只细节
-    dbgRef.current = { layerMode: 'all', nodeColor: false, showBounds: false, fixedPixel: false, sampleRatio: 0.15 };
+    dbgRef.current = { layerMode: 'all', nodeColor: false, showBounds: false, fixedPixel: true, sampleRatio: 1 };
     let dbgNodeColor = false;   // 按节点随机着色
     let dbgShowBounds = false;  // 画节点包围盒
     const boundsGroup = new THREE.Group();
@@ -178,46 +189,36 @@ export function ThreeDView() {
     const randomNodeColor = (name: string) => {
       let c = nodeColors.get(name);
       if (!c) {
-        c = new THREE.Color().setHSL((name.length * 137.5 % 360) / 360, 0.7, 0.55);
+        c = new THREE.Color().setHSL(([...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0) % 360) / 360, 0.7, 0.55);
         nodeColors.set(name, c);
       }
       return c;
     };
 
-    // 调试用 1px 固定像素点材质（同样高度着色）
-    const potreeMaterial1px = createCloudShaderMaterial({
-      mode: 0, range: [-2, 4], pointSize: 1.0,
+    const potreeMaterial = createCloudShaderMaterial({
+      mode: 0, range: [-2, 4], pointSize: 1.25, fixedPixels: true,
       lowColor: '#2a2d33', highColor: '#e8e8e8',
     });
-    potreeMaterial1px.vertexShader = potreeMaterial1px.vertexShader.replace(
-      'gl_PointSize = uPointSize * (300.0 / max(-viewPosition.z, 1.0));',
-      'gl_PointSize = uPointSize;'
-    );
-    potreeMaterial1px.uniforms.uPointSize.value = 1.0;
-    potreeMaterial1px.needsUpdate = true;
-    const potreeMaterial = createCloudShaderMaterial({
-      mode: 0,               // 高度着色（源数据强度全 0，不可用）
-      range: [-2, 4],        // 贴合实际高度分布（p5≈-1.2, p95≈1.4），避免大面积落进粉紫过渡区
-      pointSize: 0.12,
-      lowColor: '#2a2d33',   // 低值暗灰
-      highColor: '#e8e8e8',  // 高值亮白
-    });
-    // 按层级预建点尺寸：粗层（概览）小点避免实心圆斑，细层略大保证连续覆盖
-    const LEVEL_SIZES = [0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12, 0.12, 0.12, 0.12, 0.12];
-    const levelMaterials = LEVEL_SIZES.map((size) =>
-      createCloudShaderMaterial({ mode: 0, range: [-2, 4], pointSize: size, lowColor: '#2a2d33', highColor: '#e8e8e8' })
-    );
-    const potreeChunks = new Map<string, { points: THREE.Points; lastUse: number }>();
+    const potreeChunks = new Map<string, { points: THREE.Points; lastUse: number; bytes: number }>();
+    const pendingNodes = new Set<string>();
+    let desired = new Map<string, number>();
+    let lastSelection = new Set<string>();
+    let selectedBudget = 0;
     let potreeEnabled = true; // 默认开启，复选框控制开关
     let potreeTick = 0;
     const disposeChunk = (points: THREE.Points) => {
       potreeGroup.remove(points);
       points.geometry.dispose();
+      const helper = points.userData.boundsHelper as THREE.Box3Helper | undefined;
+      if (helper) { boundsGroup.remove(helper); helper.geometry.dispose(); (helper.material as THREE.Material).dispose(); }
+      if (points.material !== potreeMaterial) (points.material as THREE.Material).dispose();
     };
     const onPotreeToggle = (e: Event) => {
       potreeEnabled = Boolean((e as CustomEvent).detail);
       potreeGroup.visible = potreeEnabled;
       if (!potreeEnabled) {
+        desired.clear();
+        lastSelection.clear();
         for (const { points } of potreeChunks.values()) disposeChunk(points);
         potreeChunks.clear();
       }
@@ -288,87 +289,95 @@ export function ThreeDView() {
         lastEgoFrame = frame;
       }
 
-      // Potree overlay：按相机位置+距离分级加载，保证整条轨迹都有可见覆盖
-      if (potreeEnabled && session.potree && potreeTick++ % 12 === 0) {
-        const camPos = camera.position;
-        for (const { name, level, done } of session.potree.requestView({ x: camPos.x, y: camPos.y, z: camPos.z }, 160)) {
-          // 分层对照：按模式过滤显示的节点
-          if (dbgRef.current.layerMode === 'coarse' && level > 2) continue;
-          if (dbgRef.current.layerMode === 'detail' && level <= 2) continue;
-          const cached = potreeChunks.get(name);
-          if (cached) {
-            cached.lastUse = potreeTick;
-            continue;
-          }
-          void done.then((chunk) => {
-            if (disposed || !potreeEnabled || !chunk.count || potreeChunks.has(name)) return;
-            // 调试：按节点着色（覆盖默认材质）
-            let material: THREE.Material;
-            if (dbgRef.current.nodeColor) {
-              material = new THREE.PointsMaterial({ size: 0.12, color: randomNodeColor(name), sizeAttenuation: true });
-            } else if (dbgRef.current.fixedPixel) {
-              material = potreeMaterial1px;
-            } else {
-              material = levelMaterials[Math.min(level, LEVEL_SIZES.length - 1)] ?? potreeMaterial;
-            }
-            // 调试：均匀抽样（非数组开头，按步长取）
-            let positions = chunk.positions;
-            let count = chunk.count;
-            const sr = dbgRef.current.sampleRatio;
-            if (sr < 1 && count > 0) {
-              const step = Math.max(1, Math.round(1 / sr));
-              const n = Math.ceil(count / step);
-              positions = new Float32Array(n * 3);
-              for (let i = 0, j = 0; i < count; i += step, j++) {
-                positions[j * 3] = chunk.positions[i * 3];
-                positions[j * 3 + 1] = chunk.positions[i * 3 + 1];
-                positions[j * 3 + 2] = chunk.positions[i * 3 + 2];
-              }
-              count = n;
-            }
+      // Camera-space LOD selection; cached nodes are not automatically visible.
+      if (followEnabled) {
+        const ego = session.ego.positionAt(frame);
+        controls.target.set(ego.x, 0, ego.z);
+      }
+      controls.update();
+      if (potreeEnabled && session.potree && potreeTick++ % 6 === 0) {
+        const source = session.potree;
+        const targetSpacingPixels = 3 / densityRef.current;
+        selectedBudget = Math.min(480_000, Math.floor(
+          wrap.clientWidth * wrap.clientHeight / (targetSpacingPixels * targetSpacingPixels)
+        ));
+        const plan = source.selectView({ camera, viewportWidth: wrap.clientWidth,
+          viewportHeight: wrap.clientHeight, pointBudget: selectedBudget, targetSpacingPixels, previous: lastSelection });
+        lastSelection = new Set(plan.map(p => p.node.name));
+        desired = new Map(plan.map(p => [p.node.name, p.drawCount]));
+        for (const [name, entry] of potreeChunks) {
+          entry.points.visible = desired.has(name);
+          if (desired.has(name)) entry.lastUse = potreeTick;
+        }
+        for (const { node, priority } of plan) {
+          const name = node.name;
+          if (potreeChunks.has(name) || pendingNodes.has(name) || !node.numPoints) continue;
+          // Additive hierarchy: show/load ancestors before their details.
+          const parent = source.nodes.get(name.slice(0, -1));
+          if (parent?.numPoints && !potreeChunks.has(parent.name)) continue;
+          if (pendingNodes.size >= 12) break;
+          pendingNodes.add(name);
+          void source.requestNode(node, priority).then(chunk => {
+            if (disposed || !potreeEnabled || session.potree !== source ||
+              !desired.has(name) || !chunk.count || potreeChunks.has(name)) return;
+            const positions = stablePointOrder(chunk.positions, name);
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            const points = new THREE.Points(geometry, material);
-            points.userData.level = level;
+            geometry.setDrawRange(0, 0);
+            const points = new THREE.Points(geometry, potreeMaterial);
+            points.userData.level = node.level;
             points.userData.nodeName = name;
             potreeGroup.add(points);
-            potreeChunks.set(name, { points, lastUse: potreeTick });
-            // 调试：画节点包围盒
-            if (dbgRef.current.showBounds && session.potree) {
-              const node = session.potree.nodes.get(name);
-              if (node) {
-                const box = new THREE.Box3(
-                  new THREE.Vector3(node.boxMin.x, node.boxMin.y, node.boxMin.z),
-                  new THREE.Vector3(node.boxMax.x, node.boxMax.y, node.boxMax.z)
-                );
-                const helper = new THREE.Box3Helper(box, 0xffff00);
-                boundsGroup.add(helper);
-                points.userData.boundsHelper = helper;
-              }
-            }
-          });
+            potreeChunks.set(name, { points, lastUse: potreeTick, bytes: positions.byteLength });
+          }).catch(() => undefined).finally(() => pendingNodes.delete(name));
         }
-        // 超出驻留上限时驱逐最久未用节点（给足余量，避免远端节点被立即驱逐）
-        const MAX_NODES = 200;
-        if (potreeChunks.size > MAX_NODES) {
-          const lru = [...potreeChunks.entries()].sort((a, b) => a[1].lastUse - b[1].lastUse);
-          for (let k = 0; k < potreeChunks.size - MAX_NODES; k++) {
-            const [name, { points }] = lru[k];
-            disposeChunk(points);
-            potreeChunks.delete(name);
+        // GPU cache has a byte budget. Only inactive nodes can be evicted.
+        let residentBytes = [...potreeChunks.values()].reduce((sum, e) => sum + e.bytes, 0);
+        const inactive = [...potreeChunks].filter(([name]) => !desired.has(name))
+          .sort((a, b) => a[1].lastUse - b[1].lastUse);
+        for (const [name, entry] of inactive) {
+          if (residentBytes <= 128 * 1024 * 1024 && potreeChunks.size <= 256) break;
+          disposeChunk(entry.points);
+          residentBytes -= entry.bytes;
+          potreeChunks.delete(name);
+        }
+      }
+      potreeMaterial.uniforms.uFixedPixels.value = dbgRef.current.fixedPixel;
+      potreeMaterial.uniforms.uPointSize.value = dbgRef.current.fixedPixel ? 1.25 * renderer.getPixelRatio() : 0.12;
+      boundsGroup.visible = dbgRef.current.showBounds;
+      for (const [name, entry] of potreeChunks) {
+        const points = entry.points;
+        const level = points.userData.level as number;
+        const layerVisible = dbgRef.current.layerMode === 'all' ||
+          (dbgRef.current.layerMode === 'coarse' ? level <= 2 : level > 2);
+        const parentName = name.slice(0, -1);
+        const parentReady = name === 'r' || !session.potree?.nodes.get(parentName)?.numPoints || potreeChunks.has(parentName);
+        points.visible = potreeEnabled && desired.has(name) && layerVisible && parentReady;
+        const target = Math.floor((desired.get(name) ?? 0) * Math.max(0, Math.min(1, dbgRef.current.sampleRatio)));
+        // Nested samples grow gradually; reductions immediately respect budget.
+        points.geometry.setDrawRange(0, Math.min(target,
+          points.geometry.drawRange.count + Math.max(1, Math.ceil(target / 12))));
+        if (dbgRef.current.nodeColor && points.material === potreeMaterial) {
+          points.material = new THREE.PointsMaterial({ size: 1.25, sizeAttenuation: false, color: randomNodeColor(name) });
+        } else if (!dbgRef.current.nodeColor && points.material !== potreeMaterial) {
+          (points.material as THREE.Material).dispose(); points.material = potreeMaterial;
+        }
+        if (dbgRef.current.showBounds && !points.userData.boundsHelper) {
+          const node = session.potree?.nodes.get(name);
+          if (node) {
+            const helper = new THREE.Box3Helper(new THREE.Box3(
+              new THREE.Vector3(node.boxMin.x, node.boxMin.y, node.boxMin.z),
+              new THREE.Vector3(node.boxMax.x, node.boxMax.y, node.boxMax.z)), 0xffff00);
+            points.userData.boundsHelper = helper; boundsGroup.add(helper);
           }
         }
+        if (points.userData.boundsHelper) points.userData.boundsHelper.visible = points.visible;
       }
 
       // 拼接环境点云：无论是否跟随，都按当前视点节流加载附近分块
       if (potreeTick % 20 === 0) {
         void overlay?.ensureAround(controls.target.x, controls.target.z, 130);
       }
-      if (followEnabled) {
-        const ego = session.ego.positionAt(frame);
-        controls.target.set(ego.x, 0, ego.z);
-      }
-      controls.update();
       renderer.render(scene, camera);
       rafId = requestAnimationFrame(renderLoop);
     };
@@ -387,13 +396,15 @@ export function ThreeDView() {
       offEgo();
       offOverlay();
       disposed = true;
+      const debugWindow = window as unknown as { __lfPotreeDebug?: unknown };
+      if (debugWindow.__lfPotreeDebug === potreeDebug) delete debugWindow.__lfPotreeDebug;
       controls.dispose();
       cloudView.dispose();
       if (overlay) overlay.dispose();
       for (const { points } of potreeChunks.values()) disposeChunk(points);
       potreeChunks.clear();
       potreeMaterial.dispose();
-      for (const m of levelMaterials) m.dispose();
+
       markerGeo.dispose();
       egoLineMat.dispose();
       egoMarkerMat.dispose();
@@ -408,6 +419,21 @@ export function ThreeDView() {
   return (
     <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">
       <canvas ref={canvasRef} className="block h-full w-full" />
+      <label className="absolute right-2 top-14 flex items-center gap-2 rounded bg-black/50 px-2 py-1 text-[10px] text-slate-200">
+        点云密度
+        <input
+          type="range"
+          aria-label="点云密度"
+          min="1" max="3" step="0.1"
+          value={density}
+          className="w-20"
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            densityRef.current = value;
+            setDensity(value);
+          }}
+        />
+      </label>
       <label className="absolute right-2 top-2 flex items-center gap-1 rounded bg-black/50 px-2 py-1 text-[10px] text-slate-200">
         <input
           type="checkbox"

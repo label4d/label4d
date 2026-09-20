@@ -1,3 +1,5 @@
+import { selectPotreeNodes } from './PotreeSelection';
+import type { PotreeViewOptions } from './PotreeSelection';
 import type { Vec3 } from '../geometry/math';
 import type { TileScheduler } from './TileScheduler';
 
@@ -59,6 +61,7 @@ export interface PotreeMetadata {
   attributes: Array<{ name: string; size: number; type: string }>;
   hierarchy: { firstChunkSize: number; stepSize: number; depth: number };
   encoding?: string;
+  spacing?: number;
 }
 
 export type NetClient = {
@@ -206,53 +209,25 @@ export class PotreeOverlay {
     void offset;
   }
 
-  /** 请求距 `center` 最近的最多 `maxNodes` 个节点（旧接口，保留兼容）。 */
-  requestNear(center: Vec3, maxNodes = 96): Array<{ name: string; done: Promise<PotreeDecodedChunk> }> {
-    return this.requestView(center, maxNodes);
+  /** Compatibility helper for data inspection, independent of camera LOD. */
+  requestNear(center: Vec3, maxNodes = 96, level?: number): Array<{ name: string; done: Promise<PotreeDecodedChunk> }> {
+    return [...this.nodes.values()]
+      .filter(n => !n.isProxy && n.numPoints > 0 && (level === undefined || n.level === level))
+      .sort((a, b) => this.nodeDistance(a, center) - this.nodeDistance(b, center))
+      .slice(0, maxNodes)
+      .map(node => ({ name: node.name, done: this.requestNode(node, -this.nodeDistance(node, center)) }));
   }
 
-  /**
-   * 按屏幕空间收益调度：近处细粒度、远处概览级，保证整条轨迹有可见覆盖；
-   * 同一距离环内的层级收敛，避免相邻区域密度/大小跳变。
-   */
-  requestView(camera: Vec3, maxNodes = 160): Array<{ name: string; level: number; done: Promise<PotreeDecodedChunk> }> {
-    // 1) 全局概览常驻：level ≤2 的粗层级无条件优先（约 40 节点，覆盖整幅场景）
-    const pinned: PotreeNode[] = [];
-    for (const node of this.nodes.values()) {
-      if (node.isProxy || node.numPoints === 0) continue;
-      if (node.level <= 2) pinned.push(node);
-    }
-    const pinnedNames = new Set(pinned.map((n) => n.name));
+  selectView(options: PotreeViewOptions) {
+    const spacing = this.metadata?.spacing ?? (this.rootBox ?
+      (this.rootBox.max.x - this.rootBox.min.x) / 128 : 1);
+    return selectPotreeNodes(this.nodes, spacing, options);
+  }
 
-    // 2) 按“节点目标层级”选：层级随距离连续收紧（近细远粗），同一距离环内层级一致
-    const candidates: Array<{ node: PotreeNode; dist: number; targetLevel: number }> = [];
-    for (const node of this.nodes.values()) {
-      if (node.isProxy || node.numPoints === 0 || pinnedNames.has(node.name)) continue;
-      const dist = this.nodeDistance(node, camera);
-      // 目标层级：近处细（10），随距离递减；保证同一距离带内的节点层级一致
-      const targetLevel = Math.max(2, Math.min(10, Math.floor(10 - Math.log2(Math.max(dist, 1) / 10) * 2)));
-      candidates.push({ node, dist, targetLevel });
-    }
-    // 优先“层级接近目标层级”的节点（级差越小，与相邻的密度衔接越好）
-    candidates.sort((a, b) => {
-      const da = Math.abs(a.node.level - a.targetLevel);
-      const db = Math.abs(b.node.level - b.targetLevel);
-      if (da !== db) return da - db;
-      return a.dist - b.dist;
-    });
-    const picked = [...pinned, ...candidates.map((c) => c.node).slice(0, Math.max(0, maxNodes - pinned.length))];
-    return picked.map((node) => ({
-      name: node.name,
-      level: node.level,
-      done: this.scheduler
-        .request<PotreeDecodedChunk>(
-          `potree:${node.name}`,
-          -this.nodeDistance(node, camera),
-          node.byteSize,
-          () => this.loadNode(node)
-        )
-        .catch(() => ({ positions: new Float32Array(0), count: 0 })),
-    }));
+  requestNode(node: PotreeNode, priority: number): Promise<PotreeDecodedChunk> {
+    return this.scheduler.request<PotreeDecodedChunk>(
+      `potree:${node.name}`, priority, node.numPoints * 12, () => this.loadNode(node)
+    );
   }
 
   private nodeDistance(node: PotreeNode, p: Vec3): number {

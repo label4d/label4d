@@ -12,6 +12,8 @@ export interface CloudShaderOptions {
   range?: [number, number];
   /** 点尺寸（世界单位） */
   pointSize?: number;
+  /** Fixed drawing-buffer pixels, for sparse point rendering. */
+  fixedPixels?: boolean;
   lowColor?: string;
   highColor?: string;
 }
@@ -21,6 +23,7 @@ export function createCloudShaderMaterial(options: CloudShaderOptions = {}): THR
     uniforms: {
       uMode: { value: options.mode ?? 0 },
       uRange: { value: new THREE.Vector2(...(options.range ?? [-3, 10])) },
+      uFixedPixels: { value: options.fixedPixels ?? false },
       uPointSize: { value: options.pointSize ?? 0.12 },
       uLowColor: { value: new THREE.Color(options.lowColor ?? '#3a6fd8') },
       uHighColor: { value: new THREE.Color(options.highColor ?? '#e8462a') },
@@ -31,6 +34,7 @@ export function createCloudShaderMaterial(options: CloudShaderOptions = {}): THR
       uniform int uMode;
       uniform vec2 uRange;
       uniform float uPointSize;
+      uniform bool uFixedPixels;
 
       varying float vT;
 
@@ -47,7 +51,7 @@ export function createCloudShaderMaterial(options: CloudShaderOptions = {}): THR
 
         gl_Position = projectionMatrix * viewPosition;
         // 世界单位点尺寸：随距离衰减，分块边界大小连续
-        gl_PointSize = uPointSize * (300.0 / max(-viewPosition.z, 1.0));
+        gl_PointSize = uFixedPixels ? uPointSize : uPointSize * (300.0 / max(-viewPosition.z, 1.0));
       }
     `,
     fragmentShader: `
