@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   AttributeBadgeRenderer,
   createCloudShaderMaterial,
+  CLOUD_POINT_SIZE,
   stablePointOrder,
   PointCloudFrameView,
   TrackInstanceRenderer,
@@ -141,6 +142,8 @@ export function ThreeDView() {
 
     let downAt: { x: number; y: number } | null = null;
     const onPointerDown = (e: PointerEvent) => {
+      // 右键/中键交给 OrbitControls 平移/缩放，不进入点击选择判定
+      if (e.button !== 0) return;
       downAt = { x: e.clientX, y: e.clientY };
     };
     const onPointerUp = (e: PointerEvent) => {
@@ -196,7 +199,7 @@ export function ThreeDView() {
     };
 
     const potreeMaterial = createCloudShaderMaterial({
-      mode: 0, range: [-2, 4], pointSize: 1.25, fixedPixels: true,
+      mode: 0, range: [-2, 4], pointSize: CLOUD_POINT_SIZE, fixedPixels: true,
       lowColor: '#2a2d33', highColor: '#e8e8e8',
     });
     const potreeChunks = new Map<string, { points: THREE.Points; lastUse: number; bytes: number }>();
@@ -343,7 +346,7 @@ export function ThreeDView() {
         }
       }
       potreeMaterial.uniforms.uFixedPixels.value = dbgRef.current.fixedPixel;
-      potreeMaterial.uniforms.uPointSize.value = dbgRef.current.fixedPixel ? 1.25 * renderer.getPixelRatio() : 0.12;
+      potreeMaterial.uniforms.uPointSize.value = dbgRef.current.fixedPixel ? CLOUD_POINT_SIZE : 0.12;
       boundsGroup.visible = dbgRef.current.showBounds;
       for (const [name, entry] of potreeChunks) {
         const points = entry.points;
@@ -358,7 +361,8 @@ export function ThreeDView() {
         points.geometry.setDrawRange(0, Math.min(target,
           points.geometry.drawRange.count + Math.max(1, Math.ceil(target / 12))));
         if (dbgRef.current.nodeColor && points.material === potreeMaterial) {
-          points.material = new THREE.PointsMaterial({ size: 1.25, sizeAttenuation: false, color: randomNodeColor(name) });
+          const color = `#${randomNodeColor(name).getHexString()}`;
+          points.material = createCloudShaderMaterial({ lowColor: color, highColor: color });
         } else if (!dbgRef.current.nodeColor && points.material !== potreeMaterial) {
           (points.material as THREE.Material).dispose(); points.material = potreeMaterial;
         }
