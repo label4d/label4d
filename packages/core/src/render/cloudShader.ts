@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export const CLOUD_POINT_SIZE = 2.5;
+export const CLOUD_POINT_SIZE = 2;
 
 /**
  * 高度/强度着色点云材质：圆点裁切 + 全局统一色域（蓝→红）。
