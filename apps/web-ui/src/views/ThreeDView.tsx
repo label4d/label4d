@@ -21,6 +21,8 @@ export function ThreeDView() {
   const [follow, setFollow] = useState(false);
   const [density, setDensity] = useState(2);
   const densityRef = useRef(2);
+  const [pointSize, setPointSize] = useState(CLOUD_POINT_SIZE);
+  const pointSizeRef = useRef(CLOUD_POINT_SIZE);
   const [potree, setPotree] = useState(true); // 默认开启拼接点云
 
   useEffect(() => {
@@ -345,8 +347,9 @@ export function ThreeDView() {
           potreeChunks.delete(name);
         }
       }
+      cloudView.setPointSize(pointSizeRef.current);
       potreeMaterial.uniforms.uFixedPixels.value = dbgRef.current.fixedPixel;
-      potreeMaterial.uniforms.uPointSize.value = dbgRef.current.fixedPixel ? CLOUD_POINT_SIZE : 0.12;
+      potreeMaterial.uniforms.uPointSize.value = dbgRef.current.fixedPixel ? pointSizeRef.current : 0.12;
       boundsGroup.visible = dbgRef.current.showBounds;
       for (const [name, entry] of potreeChunks) {
         const points = entry.points;
@@ -365,6 +368,11 @@ export function ThreeDView() {
           points.material = createCloudShaderMaterial({ lowColor: color, highColor: color });
         } else if (!dbgRef.current.nodeColor && points.material !== potreeMaterial) {
           (points.material as THREE.Material).dispose(); points.material = potreeMaterial;
+        }
+        if (points.material !== potreeMaterial) {
+          const material = points.material as THREE.ShaderMaterial;
+          material.uniforms.uPointSize.value = potreeMaterial.uniforms.uPointSize.value;
+          material.uniforms.uFixedPixels.value = potreeMaterial.uniforms.uFixedPixels.value;
         }
         if (dbgRef.current.showBounds && !points.userData.boundsHelper) {
           const node = session.potree?.nodes.get(name);
@@ -437,6 +445,22 @@ export function ThreeDView() {
             setDensity(value);
           }}
         />
+      </label>
+      <label className="absolute right-2 top-20 flex items-center gap-2 rounded bg-black/50 px-2 py-1 text-[10px] text-slate-200">
+        点大小
+        <input
+          type="range"
+          aria-label="点大小"
+          min="1" max="6" step="0.25"
+          value={pointSize}
+          className="w-20"
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            pointSizeRef.current = value;
+            setPointSize(value);
+          }}
+        />
+        <output className="w-12 text-right tabular-nums">{pointSize.toFixed(2)} px</output>
       </label>
       <label className="absolute right-2 top-2 flex items-center gap-1 rounded bg-black/50 px-2 py-1 text-[10px] text-slate-200">
         <input

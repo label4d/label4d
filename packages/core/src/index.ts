@@ -107,7 +107,7 @@ export {
   rgbBytesToLinearColors, BOX_EDGES, paintBadge,
 } from './render/shared';
 export type { DynamicLines } from './render/shared';
-export { createCloudShaderMaterial } from './render/cloudShader';
+export { CLOUD_POINT_SIZE, createCloudShaderMaterial } from './render/cloudShader';
 export type { CloudShaderOptions } from './render/cloudShader';
 
 // session

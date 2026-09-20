@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { PointCloudFrame } from '../io/pcd';
 import { rgbBytesToLinearColors } from './shared';
+import { CLOUD_POINT_SIZE, createCloudShaderMaterial } from './cloudShader';
 
 /** Height color ramp: low = blue, mid = green, high = red. */
 function heightColor(y: number, min: number, range: number, out: THREE.Color): void {
@@ -22,18 +23,15 @@ export class PointCloudFrameView {
   readonly group = new THREE.Group();
 
   private points: THREE.Points | null = null;
-  private material: THREE.PointsMaterial;
+  private material: THREE.ShaderMaterial;
   private currentFrame = -1;
   private frameBuffer: PointCloudFrame | null = null;
 
-  pointSize = 0.12;
+  /** Diameter in CSS pixels, shared with Potree. */
+  pointSize = CLOUD_POINT_SIZE;
 
   constructor() {
-    this.material = new THREE.PointsMaterial({
-      size: this.pointSize,
-      vertexColors: true,
-      sizeAttenuation: true,
-    });
+    this.material = createCloudShaderMaterial({ pointSize: this.pointSize, vertexColors: true });
     this.group.add(this.buildBaseGrid());
   }
 
@@ -81,7 +79,7 @@ export class PointCloudFrameView {
         colors[i * 3 + 2] = color.b;
       }
     }
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('pointColor', new THREE.BufferAttribute(colors, 3));
     geometry.computeBoundingSphere();
 
     this.points = new THREE.Points(geometry, this.material);
@@ -91,7 +89,7 @@ export class PointCloudFrameView {
 
   setPointSize(size: number): void {
     this.pointSize = size;
-    this.material.size = size;
+    this.material.uniforms.uPointSize.value = size;
   }
 
   dispose(): void {

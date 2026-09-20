@@ -51,20 +51,50 @@ export function selectPotreeNodes(
   };
   push(nodes.get('r'));
   const selected: PotreeSelection[] = [];
-  let remaining = budget;
-  while (queue.length && remaining > 0) {
+  // Discover required detail BEFORE allocating the draw budget. Otherwise a
+  // dense ancestor consumes the budget and prevents zoom from visiting children.
+  while (queue.length && selected.length < Math.min(4096, budget)) {
     queue.sort((a, b) => b.pixels - a.pixels || a.node.level - b.node.level || a.node.name.localeCompare(b.node.name));
     const { node, pixels, distance } = queue.shift()!;
     // Limit each incremental layer's contribution as well as the global sum.
     // Dense source nodes must not turn into solid squares merely because loaded.
     const localBudget = Math.max(1, Math.floor(pixels * pixels / (spacing * spacing * (node.level + 1) ** 2)));
-    const drawCount = Math.min(node.numPoints, localBudget, remaining);
+    const drawCount = Math.min(node.numPoints, localBudget);
     selected.push({ node, drawCount, priority: pixels });
-    remaining -= drawCount;
     const projectedSpacing = rootSpacing / 2 ** node.level * focal / distance;
     const threshold = spacing * (Array.from({ length: 8 }, (_, i) => options.previous?.has(`${node.name}${i}`)).some(Boolean) ? 0.85 : 1.15);
     if (projectedSpacing <= threshold) continue;
     for (let i = 0; i < 8; i++) push(nodes.get(`${node.name}${i}`));
+  }
+  // Keep a minimal additive contribution from every selected ancestor. Share
+  // the remaining budget across branches rather than spending it in traversal
+  // order. Square-root weights prevent one dense source node monopolizing it.
+  const capacities = selected.map(s => s.drawCount);
+  const weights = selected.map(s => Math.sqrt(s.drawCount) * (s.node.level + 1));
+  for (const item of selected) item.drawCount = Math.min(1, item.drawCount);
+  let remaining = budget - selected.reduce((sum, s) => sum + s.drawCount, 0);
+  let active = selected.map((_, i) => i).filter(i => capacities[i] > selected[i].drawCount);
+  while (remaining > 0 && active.length) {
+    const totalWeight = active.reduce((sum, i) => sum + weights[i], 0);
+    const available = remaining;
+    let spent = 0;
+    for (const i of active) {
+      const amount = Math.min(capacities[i] - selected[i].drawCount,
+        Math.floor(available * weights[i] / totalWeight));
+      selected[i].drawCount += amount;
+      spent += amount;
+    }
+    remaining -= spent;
+    active = active.filter(i => capacities[i] > selected[i].drawCount);
+    if (!spent) {
+      // Deterministic rounding: highest-benefit entries receive remainder.
+      active.sort((a,b) => weights[b] - weights[a] || a-b);
+      for (const i of active) {
+        if (!remaining) break;
+        selected[i].drawCount++; remaining--;
+      }
+      break;
+    }
   }
   return selected;
 }
