@@ -87,8 +87,10 @@ describe('History & commands', () => {
     history.push(new AddTrackCommand(store, seed()));
     const second = seed();
     second.meta.id = 'trk_000002';
-    second.keyframes.frames = [20, 30];
-    second.keyframes.pos = [20, 1, 0, 30, 1, 0];
+    second.meta.startFrame = 11;
+    second.meta.endFrame = 30;
+    second.keyframes.frames = [11, 30];
+    second.keyframes.pos = [11, 1, 0, 30, 1, 0];
     history.push(new AddTrackCommand(store, second));
     history.push(new MergeTracksCommand(store, 'trk_000001', 'trk_000002'));
     expect(store.trackCount).toBe(1);

@@ -14,9 +14,10 @@ const TOOLS: Array<{ id: ToolId; label: string; hint: string }> = [
 
 export function Toolbar() {
   const session = useSession();
-  useSessionTick(['toolChanged', 'historyChanged', 'manifestLoaded', 'storeChanged', 'labelsChanged', 'blinkChanged']);
+  useSessionTick(['toolChanged', 'historyChanged', 'manifestLoaded', 'storeChanged', 'labelsChanged', 'blinkChanged', 'qaChanged', 'saveChanged']);
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [, refresh] = useState(0);
   const [showAllBadges, setShowAllBadges] = useState(false);
 
   const dynamicLabels = session.labels.filter((l) => l.dynamic);
@@ -82,14 +83,14 @@ export function Toolbar() {
 
       <button
         className="btn disabled:opacity-40"
-        disabled={!session.history.canUndo}
+        disabled={!session.history.canUndo || !session.canEdit}
         onClick={() => session.undo()}
       >
         ↩ 撤销
       </button>
       <button
         className="btn disabled:opacity-40"
-        disabled={!session.history.canRedo}
+        disabled={!session.history.canRedo || !session.canEdit}
         onClick={() => session.redo()}
       >
         ↪ 重做
@@ -128,16 +129,22 @@ export function Toolbar() {
         </button>
       )}
 
-      <div className="mx-1 h-4 w-px bg-[#283242]" />
+      <label className="flex items-center gap-1 text-slate-400">
+        <input type="checkbox" checked={session.heightPolicy === 'zero-plane'}
+          onChange={(e) => { session.heightPolicy = e.target.checked ? 'zero-plane' : 'terrain'; refresh((n) => n + 1); }} />
+        创建时使用零平面
+      </label>
 
       <button
         className="btn"
-        disabled={busy}
+        disabled={busy || !session.canEdit}
         onClick={async () => {
           setBusy(true);
-          const imported = await session.runAssist(new DemoAssistAdapter(session.frameCount), 0.5);
-          setBusy(false);
-          window.alert(`模型辅助：导入 ${imported} 条候选轨迹（一个撤销步骤）`);
+          try {
+            const imported = await session.runAssist(new DemoAssistAdapter(session.frameCount), 0.5);
+            window.alert(`模型辅助：导入 ${imported} 条候选轨迹（一个撤销步骤）`);
+          } catch (error) { session.events.emit('error', { message: String(error) }); }
+          finally { setBusy(false); }
         }}
       >
         {busy ? '推理中…' : '模型预标注'}
@@ -152,9 +159,9 @@ export function Toolbar() {
         className="btn"
         onClick={() => download(session.exportNuScenes({ sampleStep: 5 }), `${session.manifest?.id ?? 'sequence'}.nuscenes.json`)}
       >
-        导出 nuScenes
+        导出 nuScenes 草稿
       </button>
-      <button className="btn" onClick={() => fileRef.current?.click()}>
+      <button className="btn" disabled={!session.canEdit} onClick={() => fileRef.current?.click()}>
         导入快照
       </button>
       <input
@@ -175,9 +182,10 @@ export function Toolbar() {
 
       <select
         className="ml-auto rounded bg-[#1d2530] px-1 py-1 text-slate-300 outline-none"
+        disabled={!session.canEdit}
         value={session.qa.status}
         onChange={(e) => {
-          session.qa = { ...session.qa, status: e.target.value as typeof session.qa.status };
+          session.setQA(e.target.value as typeof session.qa.status);
         }}
         title="质检状态"
       >

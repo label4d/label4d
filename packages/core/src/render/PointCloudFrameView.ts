@@ -24,6 +24,7 @@ export class PointCloudFrameView {
 
   private points: THREE.Points | null = null;
   private material: THREE.ShaderMaterial;
+  private readonly grid: THREE.GridHelper;
   private currentFrame = -1;
   private frameBuffer: PointCloudFrame | null = null;
 
@@ -32,7 +33,7 @@ export class PointCloudFrameView {
 
   constructor() {
     this.material = createCloudShaderMaterial({ pointSize: this.pointSize, vertexColors: true });
-    this.group.add(this.buildBaseGrid());
+    this.grid = this.buildBaseGrid(); this.group.add(this.grid);
   }
 
   get frame(): number {
@@ -44,8 +45,10 @@ export class PointCloudFrameView {
   }
 
   setFrame(geo: PointCloudFrame | null, frame: number): void {
-    // 新帧未就绪时保留旧点云，避免切帧空窗闪烁；只有拿到数据才替换
-    if (!geo || geo.count === 0) return;
+    if (!geo || geo.count === 0) {
+      if (this.points) { this.group.remove(this.points); this.points.geometry.dispose(); this.points = null; }
+      this.frameBuffer = null; this.currentFrame = frame; return;
+    }
     if (frame === this.currentFrame && geo === this.frameBuffer) return;
     this.currentFrame = frame;
     this.frameBuffer = geo;
@@ -96,7 +99,7 @@ export class PointCloudFrameView {
     if (this.points) {
       this.points.geometry.dispose();
     }
-    this.material.dispose();
+    this.material.dispose(); this.grid.geometry.dispose(); (this.grid.material as THREE.Material).dispose();
   }
 
   private buildBaseGrid(): THREE.GridHelper {

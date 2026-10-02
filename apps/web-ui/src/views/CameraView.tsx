@@ -23,11 +23,11 @@ export function CameraView({ index = 0 }: { index?: number }) {
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     const view = new CameraImageView(session.labels);
-    (window as unknown as { __lfCam?: unknown }).__lfCam = view;
+    const debug = window as unknown as { __lfCam?: unknown; __lfCamTicks?: unknown };
+    if (import.meta.env.DEV) debug.__lfCam = view;
 
     let currentProjectorId: string | null = null;
     let currentImage: unknown = null;
-    let currentFrame = -1;
 
     const resize = () => {
       renderer.setSize(wrap.clientWidth, wrap.clientHeight, false);
@@ -80,10 +80,10 @@ export function CameraView({ index = 0 }: { index?: number }) {
 
     // 视图平移/缩放：滚轮缩放（光标为中心），左键拖动平移
     let panLast: { x: number; y: number } | null = null;
-    canvas.addEventListener('pointerdown', (e) => {
+    const onPanDown = (e: PointerEvent) => {
       if (e.button === 0) { panLast = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); }
-    });
-    canvas.addEventListener('pointermove', (e) => {
+    };
+    const onPanMove = (e: PointerEvent) => {
       if (!panLast || !view.hasProjector) return;
       const rect = canvas.getBoundingClientRect();
       const config = (view.camera.userData as { config?: { width: number; height: number } }).config;
@@ -94,8 +94,13 @@ export function CameraView({ index = 0 }: { index?: number }) {
       const ky = config.height / (rect.height * view.viewScaleValue);
       view.panByPixels((e.clientX - panLast.x) * kx, -(e.clientY - panLast.y) * ky);
       panLast = { x: e.clientX, y: e.clientY };
-    });
-    canvas.addEventListener('pointerup', () => { panLast = null; });
+    };
+    const onPanUp = () => { panLast = null; };
+    const cancelPointer = () => { panLast = null; downAt = null; };
+    canvas.addEventListener('pointerdown', onPanDown);
+    canvas.addEventListener('pointermove', onPanMove);
+    canvas.addEventListener('pointerup', onPanUp);
+    canvas.addEventListener('pointercancel', cancelPointer);
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
@@ -114,7 +119,7 @@ export function CameraView({ index = 0 }: { index?: number }) {
 
     let rafId = 0;
     const ticks = { n: 0, wanted: null as string | null };
-    (window as unknown as { __lfCamTicks?: typeof ticks }).__lfCamTicks = ticks;
+    if (import.meta.env.DEV) debug.__lfCamTicks = ticks;
     const renderLoop = () => {
       try {
         runFrame();
@@ -127,7 +132,7 @@ export function CameraView({ index = 0 }: { index?: number }) {
     const runFrame = () => {
       ticks.n++;
       const cameras = [...session.projectors.keys()];
-      const wantedId = cameras.length ? cameras[Math.min(index, cameras.length - 1)] : null;
+      const wantedId = cameraId && session.projectors.has(cameraId) ? cameraId : cameras.length ? cameras[Math.min(index, cameras.length - 1)] : null;
       if (wantedId && wantedId !== currentProjectorId) {
         const projector = session.projectors.get(wantedId);
         if (projector) {
@@ -140,17 +145,14 @@ export function CameraView({ index = 0 }: { index?: number }) {
 
       const frame = session.frame;
       // ensure current image is requested; FrameBuffer prefetch usually wins
-      const image = session.currentCameraImage();
-      if (image && image !== currentImage) {
+      const image = session.currentCameraImage(wantedId);
+      if (image !== currentImage) {
         currentImage = image;
         view.setImage(image);
-      } else if (!image && session.imageFrames && frame !== currentFrame) {
-        void session.imageFrames.ensure(frame);
       }
-      currentFrame = frame;
 
       if (currentProjectorId) {
-        view.syncFrame(frame, session.store, session.selection, session.currentPointCloud(), session.hover);
+        if (image) view.syncFrame(frame, session.store, session.selection, session.currentPointCloud(), session.hover, session.selectionPreview, session.hiddenLabels);
         view.render(renderer);
       }
     };
@@ -162,12 +164,19 @@ export function CameraView({ index = 0 }: { index?: number }) {
       canvas.removeEventListener('dblclick', onDoubleClick);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointerdown', onPanDown);
+      canvas.removeEventListener('pointermove', onPanMove);
+      canvas.removeEventListener('pointerup', onPanUp);
+      canvas.removeEventListener('pointercancel', cancelPointer);
+      canvas.removeEventListener('wheel', onWheel);
       window.removeEventListener('lf:badges', onBadgeToggle);
       window.removeEventListener('lf:cloudproj', onCloudProj);
+      if (debug.__lfCam === view) delete debug.__lfCam;
+      if (debug.__lfCamTicks === ticks) delete debug.__lfCamTicks;
       view.dispose();
       renderer.dispose();
     };
-  }, [session, cameraId]);
+  }, [session, cameraId, session.manifest, index]);
 
   const cameras = [...session.projectors.keys()];
   const editorTrack = editor ? session.store.getTrack(editor.id) : undefined;

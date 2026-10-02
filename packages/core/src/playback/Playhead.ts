@@ -22,6 +22,7 @@ const fallbackCancel: CancelRafFn = (id) => clearTimeout(id);
 export class Playhead {
   readonly events = new EventEmitter<PlayheadEvents>();
 
+  canAdvance: () => boolean = () => true;
   fps = 10;
   speed = 1;
   loop = true;
@@ -109,10 +110,11 @@ export class Playhead {
     if (!this._playing) return;
     const dt = Math.min(0.25, (timestamp - this.lastTimestamp) / 1000);
     this.lastTimestamp = timestamp;
+    if (!this.canAdvance()) { this.accumulator = 0; this.scheduleTick(); return; }
     this.accumulator += dt * this.speed;
     const frameDuration = 1 / Math.max(1, this.fps);
     let advanced = false;
-    while (this.accumulator >= frameDuration) {
+    if (this.accumulator >= frameDuration) {
       this.accumulator -= frameDuration;
       const next = this._frame + 1;
       if (next > this.last) {

@@ -1,3 +1,5 @@
+import { previewPose } from '../geometry/math';
+import type { InstancePreview } from './TrackInstanceRenderer';
 import * as THREE from 'three';
 import { pointInPolygon } from '../geometry/math';
 import type { CameraProjector } from '../projection/projection';
@@ -117,7 +119,11 @@ export class CameraImageView {
   get hasProjector(): boolean {
     return this.projector !== null;
   }
-  private options: CameraViewOptions = { showAll: false, cloudProjection: true, minSupportPoints: 20 };
+  private lastSyncKey = '';
+  private lastSyncCloud: PointCloudFrame | null = null;
+  private lastProjectedCloud: PointCloudFrame | null = null;
+  private cloudProjectionKey = '';
+  private options: CameraViewOptions = { showAll: false, cloudProjection: true, minSupportPoints: 0 };
   private readonly geomLines: DynamicLines;
   private readonly geomBuf: Float32Array;
   private readonly geomColors: Float32Array;
@@ -174,7 +180,7 @@ export class CameraImageView {
   }
 
   attachProjector(projector: CameraProjector): void {
-    this.projector = projector;
+    this.projector = projector; this.lastSyncKey = ''; this.cloudProjectionKey = '';
     const { width, height } = projector.config;
     this.viewCx = width / 2;
     this.viewCy = height / 2;
@@ -227,7 +233,7 @@ export class CameraImageView {
     this.camera.updateProjectionMatrix();
   }
 
-  setImage(image: ImageBitmap | HTMLImageElement): void {
+  setImage(image: ImageBitmap | HTMLImageElement | null): void {
     const config = this.projector?.config;
     if (!config) return;
     if (this.imageMesh) {
@@ -237,6 +243,9 @@ export class CameraImageView {
       material.map?.dispose();
       material.dispose();
     }
+    this.imageMesh = null;
+    this.group.visible = Boolean(image);
+    if (!image) { this.hulls = []; return; }
     const texture = new THREE.Texture(image);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.flipY = false;
@@ -260,9 +269,14 @@ export class CameraImageView {
     store: TrackStore,
     selection: SelectionSet,
     cloud: PointCloudFrame | null,
-    hoverId: string | null = null
+    hoverId: string | null = null,
+    preview: InstancePreview | null = null,
+    hiddenLabels?: ReadonlySet<string>
   ): void {
     if (!this.projector) return;
+    const key = `${frame}:${store.currentVersion}:${selection.currentVersion}:${hoverId}:${JSON.stringify([...(hiddenLabels ?? [])].sort())}:${JSON.stringify(this.options)}:${JSON.stringify(preview ? { ...preview, ids: [...preview.ids] } : null)}`;
+    if (key === this.lastSyncKey && cloud === this.lastSyncCloud) return;
+    this.lastSyncKey = key; this.lastSyncCloud = cloud;
     const { width, height } = this.projector.config;
     const toGlY = (py: number) => height - py;
     let hv = 0;
@@ -273,11 +287,13 @@ export class CameraImageView {
     const color = new THREE.Color();
 
     for (const id of store.activeTrackIds(frame)) {
-      const state = store.resolveState(id, frame);
-      if (!state) continue;
+      if (hiddenLabels?.has(store.getTrack(id)?.meta.label ?? '')) continue;
+      const resolved = store.resolveState(id, frame);
+      if (!resolved) continue;
+      const state = { ...resolved, ...previewPose(id, resolved.pos, resolved.yaw, preview) };
       const record = store.getTrack(id);
       // 点支撑校验：框内没有点云证据的对象不投影（避免悬空框）
-      if (this.countBoxSupport(cloud, state.pos, state.yaw, state.size) < this.options.minSupportPoints) continue;
+      if (this.options.minSupportPoints > 0 && this.countBoxSupport(cloud, state.pos, state.yaw, state.size) < this.options.minSupportPoints) continue;
       const projection: BoxProjection = this.projector.projectBox(state.pos, state.yaw, state.size, frame);
       if (!projection.visible || projection.hull.length < 6) continue;
       // 完全越界的投影不绘制
@@ -522,6 +538,9 @@ export class CameraImageView {
 
   private syncCloudProjection(cloud: PointCloudFrame | null, frame: number, width: number, height: number): void {
     if (!this.projector) return;
+    const key = `${frame}:${width}:${height}:${this.maxCloudPoints}`;
+    if (key === this.cloudProjectionKey && cloud === this.lastProjectedCloud) return;
+    this.cloudProjectionKey = key; this.lastProjectedCloud = cloud;
     if (this.cloudPoints) {
       this.group.remove(this.cloudPoints);
       this.cloudPoints.geometry.dispose();

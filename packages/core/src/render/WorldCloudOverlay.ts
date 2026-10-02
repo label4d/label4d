@@ -1,120 +1,81 @@
 import * as THREE from 'three';
-
+import { TileScheduler } from '../stream/TileScheduler';
 export interface WorldCloudIndex {
   bounds: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
   cellSize: number;
   overview: { url: string; points: number };
   cells: Array<{ file: string; cx: number; cz: number; points: number }>;
 }
-
-/**
- * 全局拼接点云（4D 序列静态环境）的流式渲染：概览层常驻，
- * 按视点距离加载 XZ 网格分块，LRU 控制驻留块数。
- */
+let nextWorldOverlay = 0;
+/** Static cloud cells share the Session scheduler and have one explicit GPU owner. */
 export class WorldCloudOverlay {
   readonly group = new THREE.Group();
   private index: WorldCloudIndex | null = null;
   private baseUrl = '';
-  private overview: THREE.Points | null = null;
   private cells = new Map<string, { points: THREE.Points; lastUse: number }>();
   private pending = new Set<string>();
+  private desired = new Set<string>();
+  private failed = new Set<string>();
   private clock = 0;
+  private disposed = false;
+  private readonly prefix = `world:${++nextWorldOverlay}:`;
+  private readonly scheduler: TileScheduler;
+  private readonly ownsScheduler: boolean;
   maxCells = 128;
   enabled = false;
-
-  constructor(private fetchBinary: (url: string) => Promise<ArrayBuffer>) {}
-
+  constructor(private readonly fetchBinary: (url: string, signal?: AbortSignal) => Promise<ArrayBuffer>, scheduler?: TileScheduler) {
+    this.scheduler = scheduler ?? new TileScheduler({ budgetBytes: 128 * 1024 * 1024 });
+    this.ownsScheduler = !scheduler;
+  }
   async load(indexUrl: string): Promise<void> {
-    this.baseUrl = indexUrl.replace(/index\.json$/, '');
-    const index = (await this.fetchJson(indexUrl)) as WorldCloudIndex;
+    this.baseUrl = new URL('.', new URL(indexUrl, typeof location === 'undefined' ? 'http://localhost/' : location.href)).href;
+    const index = JSON.parse(new TextDecoder().decode(await this.fetchBinary(indexUrl))) as WorldCloudIndex;
+    if (this.disposed) return;
+    if (!index.overview || !Array.isArray(index.cells) || !Number.isFinite(index.cellSize) || index.cellSize <= 0) throw new Error('Invalid world cloud index');
     this.index = index;
-    const buf = new Float32Array(await (await this.fetchBinary(this.abs(index.overview.url))).slice(0));
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(buf, 3));
-    const material = new THREE.PointsMaterial({ size: 0.18, color: 0xffffff, sizeAttenuation: true });
-    this.overview = new THREE.Points(geometry, material);
-    this.group.add(this.overview);
+    const key = `${this.prefix}overview`;
+    const overview = await this.request(key, index.overview.url, index.overview.points, true);
+    if (!this.disposed && this.scheduler.isResident(key, overview)) this.group.add(overview);
   }
-
-  private abs(url: string): string {
-    // index.json 里的路径已含 "world/" 前缀，剥离避免 kitti/world/world/... 重复
-    return this.baseUrl + url.replace(/^world\//, '');
+  private abs(url: string): string { return new URL(url.replace(/^world\//, ''), this.baseUrl).href; }
+  private request(key: string, url: string, count: number, pinned = false): Promise<THREE.Points> {
+    return this.scheduler.request(key, pinned ? 60 : 20, count * 12, async (signal) => {
+      const buffer = await this.fetchBinary(this.abs(url), signal);
+      if (buffer.byteLength !== count * 12) throw new Error('Invalid world cloud point payload');
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(buffer), 3));
+      return new THREE.Points(geometry, new THREE.PointsMaterial({ size: pinned ? 0.18 : 0.1, color: 0xffffff, sizeAttenuation: true }));
+    }, { pinned, bytes: (points) => points.geometry.getAttribute('position').array.byteLength,
+      dispose: (points) => {
+        this.group.remove(points); points.geometry.dispose(); (points.material as THREE.Material).dispose(); this.cells.delete(key);
+      } });
   }
-
-  private fetchJson(url: string): Promise<unknown> {
-    return this.fetchBinary(url).then((b) => JSON.parse(new TextDecoder().decode(b)));
-  }
-
   async ensureAround(x: number, z: number, radius: number): Promise<void> {
-    if (!this.index || !this.enabled) return;
-    this.clock++;
-    const { cellSize, cells } = this.index;
-    const needed = new Set<string>();
-    for (const cell of cells) {
-      const ccx = (cell.cx + 0.5) * cellSize + this.index.bounds.minX;
-      const ccz = (cell.cz + 0.5) * cellSize + this.index.bounds.minZ;
-      const dist = Math.hypot(ccx - x, ccz - z);
-      const key = `${cell.cx}_${cell.cz}`;
-      if (dist <= radius) {
-        needed.add(key);
-        const existing = this.cells.get(key);
-        if (existing) {
-          // 本轮仍需要的分块：更新 lastUse，避免被本轮驱逐误伤
-          existing.lastUse = this.clock;
-          continue;
-        }
-        if (this.pending.has(key)) continue;
-        this.pending.add(key);
-        const file = cell.file;
-        this.fetchBinary(this.abs(file))
-          .then((buffer) => {
-            const positions = new Float32Array(buffer.slice(0));
-            const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            const points = new THREE.Points(
-              geometry,
-              new THREE.PointsMaterial({ size: 0.1, color: 0xffffff, sizeAttenuation: true })
-            );
-            this.cells.set(key, { points, lastUse: this.clock++ });
-            this.group.add(points);
-            this.evict();
-          })
-          .catch(() => undefined)
-          .finally(() => this.pending.delete(key));
-      }
+    if (!this.index || !this.enabled || this.disposed) return;
+    this.clock++; this.desired.clear();
+    const { cellSize } = this.index;
+    const candidates = this.index.cells.map((cell) => ({ cell, distance: Math.hypot(
+      (cell.cx + 0.5) * cellSize + this.index!.bounds.minX - x,
+      (cell.cz + 0.5) * cellSize + this.index!.bounds.minZ - z) }))
+      .filter((entry) => entry.distance <= radius).sort((a, b) => a.distance - b.distance).slice(0, this.maxCells);
+    for (const { cell } of candidates) {
+      const key = `${this.prefix}${cell.cx}_${cell.cz}`;
+      this.desired.add(key);
+      const existing = this.cells.get(key);
+      if (existing) { existing.lastUse = this.clock; this.scheduler.touch(key); continue; }
+      if (this.pending.has(key) || this.failed.has(key)) continue;
+      this.pending.add(key);
+      void this.request(key, cell.file, cell.points).then((points) => {
+        if (this.disposed || !this.desired.has(key) || !this.scheduler.isResident(key, points)) { this.scheduler.release(key); return; }
+        this.cells.set(key, { points, lastUse: this.clock }); this.group.add(points);
+      }).catch((error) => { if (error?.name !== 'AbortError') this.failed.add(key); }).finally(() => this.pending.delete(key));
     }
-    // 驱逐不在本轮需要集合的分块；数量超上限时再按 LRU 兜底
-    for (const [key, entry] of this.cells) {
-      if (!needed.has(key)) {
-        this.group.remove(entry.points);
-        entry.points.geometry.dispose();
-        (entry.points.material as THREE.Material).dispose();
-        this.cells.delete(key);
-      }
-    }
+    for (const key of new Set([...this.cells.keys(), ...this.pending])) if (!this.desired.has(key)) this.scheduler.cancel(key);
   }
-
-  private evict(): void {
-    if (this.cells.size <= this.maxCells) return;
-    const entries = [...this.cells.entries()].sort((a, b) => a[1].lastUse - b[1].lastUse);
-    for (const [key, entry] of entries) {
-      if (this.cells.size <= this.maxCells) break;
-      this.group.remove(entry.points);
-      entry.points.geometry.dispose();
-      (entry.points.material as THREE.Material).dispose();
-      this.cells.delete(key);
-    }
-  }
-
   dispose(): void {
-    for (const cell of this.cells.values()) {
-      cell.points.geometry.dispose();
-      (cell.points.material as THREE.Material).dispose();
-    }
-    this.cells.clear();
-    if (this.overview) {
-      this.overview.geometry.dispose();
-      (this.overview.material as THREE.Material).dispose();
-    }
+    this.disposed = true;
+    for (const key of new Set([...this.cells.keys(), ...this.pending, `${this.prefix}overview`])) this.scheduler.cancel(key);
+    this.cells.clear(); this.desired.clear();
+    if (this.ownsScheduler) this.scheduler.dispose();
   }
 }

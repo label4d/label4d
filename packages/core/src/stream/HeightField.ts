@@ -9,7 +9,7 @@ export interface RgbaImage {
   height: number;
 }
 
-export type ImageFetcher = (url: string) => Promise<ImageBitmap | HTMLImageElement>;
+export type ImageFetcher = (url: string, signal?: AbortSignal) => Promise<ImageBitmap | HTMLImageElement>;
 export type ImageDecoder = (image: ImageBitmap | HTMLImageElement) => RgbaImage | null;
 
 /**
@@ -25,7 +25,7 @@ export function decodePackedHeights(image: RgbaImage): Float32Array {
   const d = image.data;
   for (let i = 0; i < n; i++) {
     const v = d[i * 4] + (d[i * 4 + 1] << 8) + (d[i * 4 + 2] << 16);
-    out[i] = v / 100 - 1000;
+    out[i] = d[i * 4 + 3] === 0 ? NaN : v / 100 - 1000;
   }
   return out;
 }
@@ -52,10 +52,16 @@ interface TileData {
  * Tiled height field with bilinear sampling. Drawing tools use sampleSync
  * after prefetchAround() has warmed tiles; missing tiles resolve to 0.
  */
+export type HeightSample = { status: 'ready'; value: number; resolution: number } | { status: 'loading' | 'missing' | 'error' };
+let nextHeightField = 0;
 export class HeightField {
   private pyramid: BevPyramid;
   private tiles = new Map<string, TileData>();
-  private pending = new Set<string>();
+  private pending = new Map<string, Promise<void>>();
+  private failures = new Set<string>();
+  private disposed = false;
+  private readonly prefix = `height${++nextHeightField}`;
+  private readonly offEvict: () => void;
 
   constructor(
     config: TilesetConfig,
@@ -64,6 +70,7 @@ export class HeightField {
     private decodeImage: ImageDecoder
   ) {
     this.pyramid = new BevPyramid(config);
+    this.offEvict = scheduler.events.on('evicted', ({ id }) => this.tiles.delete(id));
   }
 
   get maxLevel(): number {
@@ -71,7 +78,7 @@ export class HeightField {
   }
 
   tileId(level: number, x: number, y: number): string {
-    return `height:${level}:${x}:${y}`;
+    return `${this.prefix}:${level}:${x}:${y}`;
   }
 
   /** Warm the finest available tiles around a world position. */
@@ -83,7 +90,7 @@ export class HeightField {
   }
 
   /** Synchronous sample; falls back to coarser loaded tiles, else 0. */
-  sampleSync(x: number, z: number): number {
+  sampleState(x: number, z: number): HeightSample {
     for (let level = this.pyramid.maxLevel; level >= 0; level--) {
       const coord = this.tileCoordAt(level, x, z);
       if (!coord) continue;
@@ -92,13 +99,21 @@ export class HeightField {
       const s = Math.pow(2, this.pyramid.maxLevel - level);
       const px = (x - this.pyramid.config.originX) / (this.pyramid.config.metersPerPixel * s) - coord.x * this.pyramid.config.tileSize;
       const py = (z - this.pyramid.config.originZ) / (this.pyramid.config.metersPerPixel * s) - coord.y * this.pyramid.config.tileSize;
-      return bilinear(tile.values, tile.width, tile.height, px, py);
+      const value = bilinear(tile.values, tile.width, tile.height, px, py);
+      return Number.isFinite(value) ? { status: 'ready', value, resolution: this.pyramid.config.metersPerPixel * s } : { status: 'missing' };
     }
-    return 0;
+    const coord = this.tileCoordAt(this.pyramid.maxLevel, x, z);
+    if (!coord) return { status: 'missing' };
+    const id = this.tileId(this.pyramid.maxLevel, coord.x, coord.y);
+    return { status: this.failures.has(id) ? 'error' : this.pending.has(id) ? 'loading' : 'missing' };
+  }
+
+  sampleSync(x: number, z: number): number | null {
+    const sample = this.sampleState(x, z); return sample.status === 'ready' ? sample.value : null;
   }
 
   /** Async variant that awaits the finest tile when not yet loaded. */
-  async sample(x: number, z: number): Promise<number> {
+  async sample(x: number, z: number): Promise<number | null> {
     const coord = this.tileCoordAt(this.pyramid.maxLevel, x, z);
     if (coord) {
       await this.requestTile(this.pyramid.maxLevel, coord.x, coord.y).catch(() => undefined);
@@ -111,11 +126,16 @@ export class HeightField {
   }
 
   dispose(): void {
-    this.tiles.clear();
-    this.pending.clear();
+    this.disposed = true; this.offEvict();
+    for (const id of new Set([...this.tiles.keys(), ...this.pending.keys()])) this.scheduler.cancel(id);
+    this.tiles.clear(); this.pending.clear(); this.failures.clear();
   }
 
   private tileCoordAt(level: number, x: number, z: number): { x: number; y: number } | null {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
+    const fullX = (x - this.pyramid.config.originX) / this.pyramid.config.metersPerPixel;
+    const fullZ = (z - this.pyramid.config.originZ) / this.pyramid.config.metersPerPixel;
+    if (fullX < 0 || fullZ < 0 || fullX >= this.pyramid.config.width || fullZ >= this.pyramid.config.height) return null;
     const grid = this.pyramid.tileGridAt(level);
     const s = Math.pow(2, this.pyramid.maxLevel - level);
     const mpp = this.pyramid.config.metersPerPixel * s;
@@ -128,26 +148,21 @@ export class HeightField {
 
   private requestTile(level: number, x: number, y: number): Promise<void> {
     const id = this.tileId(level, x, y);
-    if (this.tiles.has(id) || this.pending.has(id)) return Promise.resolve();
-    this.pending.add(id);
-    const url = this.pyramid.tileUrl(level, x, y);
-    const estimate = this.pyramid.tileBytesEstimate();
-    const decodeImage = this.decodeImage;
-    const fetchImage = this.fetchImage;
-    return this.scheduler
-      .request<ImageBitmap | HTMLImageElement>(id, -2, estimate, () => fetchImage(url))
-      .then((image) => {
-        const rgba = decodeImage(image);
-        this.pending.delete(id);
-        if (!rgba) return;
-        this.tiles.set(id, {
-          values: decodePackedHeights(rgba),
-          width: rgba.width,
-          height: rgba.height,
-        });
-      })
-      .catch(() => {
-        this.pending.delete(id);
-      });
+    if (this.disposed || this.tiles.has(id) || this.failures.has(id)) return Promise.resolve();
+    const existing = this.pending.get(id); if (existing) return existing;
+    const promise = this.scheduler.request<TileData>(id, 90, this.pyramid.tileBytesEstimate(), async (signal) => {
+      const image = await this.fetchImage(this.pyramid.tileUrl(level, x, y), signal);
+      try {
+        const rgba = this.decodeImage(image);
+        if (!rgba) throw new Error('Cannot decode height image');
+        return { values: decodePackedHeights(rgba), width: rgba.width, height: rgba.height };
+      } finally { if ('close' in image) image.close(); }
+    }, { bytes: (tile) => tile.values.byteLength })
+      .then((tile) => {
+        if (this.disposed || !this.scheduler.isResident(id, tile)) { this.scheduler.release(id); return; }
+        this.tiles.set(id, tile);
+      }).catch((error) => { if (error?.name !== 'AbortError' && !this.disposed) this.failures.add(id); })
+      .finally(() => this.pending.delete(id));
+    this.pending.set(id, promise); return promise;
   }
 }

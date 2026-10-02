@@ -10,16 +10,17 @@ export interface Command {
 
 export interface HistoryEvents {
   changed: { canUndo: boolean; canRedo: boolean };
+  failed: { error: unknown };
 }
 
 /** Groups commands into one undo step (model-assist imports, multi-edit). */
 export class Transaction implements Command {
   readonly name = 'batch';
-  readonly payload: unknown;
+  readonly payload: { children: Array<{ name: string; payload: unknown }> };
   private applied = false;
 
   constructor(private readonly children: Command[]) {
-    this.payload = children.map((c) => ({ name: c.name, payload: c.payload }));
+    this.payload = { children: children.map((c) => ({ name: c.name, payload: c.payload })) };
   }
 
   get size(): number {
@@ -28,8 +29,14 @@ export class Transaction implements Command {
 
   apply(): void {
     if (this.applied) return;
-    for (const c of this.children) c.apply();
-    this.applied = true;
+    const completed: Command[] = [];
+    try {
+      for (const c of this.children) { c.apply(); completed.push(c); }
+      this.applied = true;
+    } catch (error) {
+      for (const c of completed.reverse()) c.undo();
+      throw error;
+    }
   }
 
   undo(): void {
@@ -44,21 +51,49 @@ export class History {
 
   private undoStack: Command[] = [];
   private redoStack: Command[] = [];
-  private recorder: ((cmd: Command) => void) | null = null;
-  limit = 2000;
+  private recorder: ((cmd: Command, action: 'apply' | 'undo' | 'redo') => void) | null = null;
+  private atomic: (fn: () => void) => void = (fn) => fn();
 
-  /** Called on every pushed (newly applied) command, never on undo/redo. */
-  setRecorder(recorder: ((cmd: Command) => void) | null): void {
+  setAtomic(atomic: (fn: () => void) => void): void { this.atomic = atomic; }
+  limit = 2000;
+  pending = false;
+  private committer: ((cmd: Command, action: 'apply' | 'undo' | 'redo') => Promise<Command>) | null = null;
+  private lastCommit: Promise<void> = Promise.resolve();
+  private retry: (() => void) | null = null;
+  setCommitter(committer: typeof this.committer): void { this.committer = committer; }
+  whenIdle(): Promise<void> { return this.lastCommit; }
+  restore(undo: Command[], redo: Command[]): void {
+    if (this.pending) throw new Error('Cannot restore a saving history');
+    this.undoStack = undo; this.redoStack = redo; this.emit();
+  }
+  retryFailed(): void { this.retry?.(); }
+
+  private execute(cmd: Command, action: 'apply' | 'undo' | 'redo', accept: (cmd: Command) => void): void {
+    if (this.pending) throw new Error('An edit is still being saved');
+    if (!this.committer) {
+      this.atomic(() => { if (action === 'undo') cmd.undo(); else cmd.apply(); this.recorder?.(cmd, action); });
+      accept(cmd); this.emit(); return;
+    }
+    this.pending = true; this.retry = null; this.emit();
+    this.lastCommit = this.committer(cmd, action).then((committed) => { accept(committed); }).catch((error) => {
+      this.retry = () => this.execute(cmd, action, accept);
+      this.events.emit('failed', { error }); throw error;
+    }).finally(() => { this.pending = false; this.emit(); });
+    // UI callers may intentionally fire and forget; errors are also exposed through whenIdle().
+    void this.lastCommit.catch(() => {});
+  }
+
+  /** Records every logical edit, including undo/redo, inside the commit boundary. */
+  setRecorder(recorder: ((cmd: Command, action: 'apply' | 'undo' | 'redo') => void) | null): void {
     this.recorder = recorder;
   }
 
   push(cmd: Command): void {
-    cmd.apply();
-    this.undoStack.push(cmd);
-    if (this.undoStack.length > this.limit) this.undoStack.shift();
-    this.redoStack = [];
-    this.recorder?.(cmd);
-    this.emit();
+    this.execute(cmd, 'apply', (committed) => {
+      this.undoStack.push(committed);
+      if (this.undoStack.length > this.limit) this.undoStack.shift();
+      this.redoStack = [];
+    });
   }
 
   pushTransaction(children: Command[]): Transaction {
@@ -68,32 +103,29 @@ export class History {
   }
 
   undo(): Command | null {
-    const cmd = this.undoStack.pop();
+    const cmd = this.undoStack[this.undoStack.length - 1];
     if (!cmd) return null;
-    cmd.undo();
-    this.redoStack.push(cmd);
-    this.emit();
+    this.execute(cmd, 'undo', () => { this.undoStack.pop(); this.redoStack.push(cmd); });
     return cmd;
   }
-
   redo(): Command | null {
-    const cmd = this.redoStack.pop();
+    const cmd = this.redoStack[this.redoStack.length - 1];
     if (!cmd) return null;
-    cmd.apply();
-    this.undoStack.push(cmd);
-    this.emit();
+    this.execute(cmd, 'redo', () => { this.redoStack.pop(); this.undoStack.push(cmd); });
     return cmd;
   }
 
   get canUndo(): boolean {
-    return this.undoStack.length > 0;
+    return !this.pending && this.undoStack.length > 0;
   }
 
   get canRedo(): boolean {
-    return this.redoStack.length > 0;
+    return !this.pending && this.redoStack.length > 0;
   }
 
   clear(): void {
+    if (this.pending) throw new Error('Cannot clear a saving history');
+    this.retry = null;
     this.undoStack = [];
     this.redoStack = [];
     this.emit();
@@ -109,6 +141,7 @@ export interface OpRecord {
   ts: number;
   name: string;
   payload: unknown;
+  action: 'apply' | 'undo' | 'redo';
 }
 
 export interface SnapshotEnvelope {
@@ -128,9 +161,9 @@ export class OpLog {
   /** Produces a full document snapshot (wired to snapshot serialization). */
   snapshotProvider: (() => unknown) | null = null;
 
-  record(name: string, payload: unknown): OpRecord {
+  record(name: string, payload: unknown, action: OpRecord['action'] = 'apply'): OpRecord {
     this.seq++;
-    const record: OpRecord = { seq: this.seq, ts: Date.now(), name, payload };
+    const record: OpRecord = { seq: this.seq, ts: Date.now(), name, payload: structuredClone(payload), action };
     this.records.push(record);
     if (this.seq % this.snapshotEvery === 0 && this.snapshotProvider) {
       this.snapshots.push({ seq: this.seq, data: this.snapshotProvider() });

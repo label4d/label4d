@@ -65,7 +65,6 @@ export function BevView() {
       if (bevTiles || !session.bevPyramid) return;
       bevTiles = new BevTileRenderer(session.bevPyramid, session.scheduler, loadImage);
       scene.add(bevTiles.group);
-      session.registerEvictHandler('bev:', (id, resource) => bevTiles?.evictResource(id, resource));
       void bevTiles.loadOverview();
     };
     ensureTiles();
@@ -271,10 +270,11 @@ export function BevView() {
         return;
       }
       if (e.button !== 0) return;
+      if (!session.canEdit) return;
       const g = toGesture(e);
       const ctx = buildContext(g.world, g.rayOrigin, g.rayDir, e);
       // 空白处左键拖动 = 平移视图（Shift 保留给框选）
-      if (!ctx.pickedId && !e.shiftKey) {
+      if (session.tools.activeTool === 'select' && !ctx.pickedId && !e.shiftKey) {
         panLast = { x: e.clientX, y: e.clientY };
         return;
       }
@@ -412,9 +412,13 @@ export function BevView() {
     };
     document.addEventListener('click', onDocClick);
     // debug/automation hook: same code path as a real right-click
-    (window as unknown as { __lfBevContext?: (x: number, y: number) => void }).__lfBevContext = (cx: number, cy: number) =>
-      openContextMenu(cx, cy);
+    const debug = window as unknown as { __lfBevContext?: (x: number, y: number) => void };
+    const debugContext = (cx: number, cy: number) => { openContextMenu(cx, cy); };
+    if (import.meta.env.DEV) debug.__lfBevContext = debugContext;
 
+    const cancelPointer = () => { panLast = null; rightPan = null; session.tools.cancel(); };
+    canvas.addEventListener('pointercancel', cancelPointer);
+    window.addEventListener('blur', cancelPointer);
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
@@ -562,12 +566,15 @@ export function BevView() {
     return () => {
       cancelAnimationFrame(rafId);
       observer.disconnect();
+      canvas.removeEventListener('pointercancel', cancelPointer);
+      window.removeEventListener('blur', cancelPointer);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('dblclick', onDoubleClick);
       canvas.removeEventListener('contextmenu', onContextMenu);
+      if (debug.__lfBevContext === debugContext) delete debug.__lfBevContext;
       document.removeEventListener('click', onDocClick);
       window.removeEventListener('lf:badges', onBadgeToggle);
       offManifest();
@@ -590,8 +597,7 @@ export function BevView() {
       }
       renderer.dispose();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session, session.manifest]);
 
   return (
     <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">

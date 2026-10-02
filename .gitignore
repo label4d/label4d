@@ -1,5 +1,4 @@
 node_modules
-pnpm-lock.yaml
 dist
 .DS_Store
 coverage
@@ -17,3 +16,6 @@ tools/py/.venv
 
 # PotreeConverter 源码 clone（构建说明见 third_party/POTREE_BUILD.md）
 third_party/PotreeConverter/
+
+apps/web-ui/test-results/
+apps/web-ui/playwright-report/

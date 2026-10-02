@@ -80,7 +80,7 @@ export function buildDemoManifest(): SequenceManifest {
         height: 540,
         intrinsics: { fx: 420, fy: 420, cx: 480, cy: 270 },
         distortion: [-0.01, 0.005, 0, 0],
-        cameraToEgo: [1, 0, 0, 0, 0, 0.7, 0.7, 0, 0, -0.7, 0.7, 0, 0, 1.6, 0, 1],
+        cameraToEgo: [1, 0, 0, 0, 0, Math.SQRT1_2, Math.SQRT1_2, 0, 0, -Math.SQRT1_2, Math.SQRT1_2, 0, 0, 1.6, 0, 1],
         imageTemplate: 'demo://camera/{frame}',
       },
     ],
@@ -193,7 +193,7 @@ const frameCache = new Map<number, PointCloudFrame>();
 export const demoNet: NetClient = {
   async fetchJson(url) {
     if (url.startsWith('demo://')) return demoEgoPoses();
-    return fetch(url).then((r) => r.json());
+    const response = await fetch(url); if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`); return response.json();
   },
   async fetchBinary(url, init) {
     if (url.startsWith('demo://pointcloud/')) {
@@ -207,13 +207,14 @@ export const demoNet: NetClient = {
       return encodeBinaryPcd(frameData);
     }
     // 必须透传 init（Potree 节点按 Range 字节段取 octree.bin）
-    return fetch(url, init).then((r) => r.arrayBuffer());
+    const response = await fetch(url, init); if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`); return response.arrayBuffer();
   },
 };
 
-export async function demoFetchImage(url: string): Promise<ImageBitmap> {
+export async function demoFetchImage(url: string, signal?: AbortSignal): Promise<ImageBitmap> {
   if (!url.startsWith('demo://camera/')) {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
+    if (!response.ok) throw new Error(`Image HTTP ${response.status}: ${url}`);
     return createImageBitmap(await response.blob(), { imageOrientation: 'flipY' });
   }
   const frame = parseInt(url.split('/').pop() ?? '0', 10) || 0;

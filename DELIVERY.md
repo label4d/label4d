@@ -1,58 +1,54 @@
-# DELIVERY — M1 实施交付
+# DELIVERY — 当前实施交付
 
-格式遵循 `docs/implementation-handoff.md` §5。当前为 **H0 阶段交付**（基线与数据），H1–H4 未完成。
+更新：2026-10-02。本轮在 `83aea5ed05d5adea4fa08e7b977080fbe0517e1a` 上实施架构审计建议，本次提交只包含架构修复与对应证据，后续 UI 优化另行提交。完整证据与边界见 [架构优化实施记录](docs/architecture-implementation-2026-10-02.md)，历史问题见 [实现审计](docs/architecture-audit-2026-10-02.md)。
 
-## 交付版本 / 工作区基线
+## 本轮完成范围
 
-- 分支 main；本交付对应提交：文档 `40554e4` → H0 `待填（本次提交）`。
-- 审计对象：commit `40554e4` 实际代码。
+- v1 领域事务原子性、统一 batch 日志、patch/inverse、拆分边界、undo 恢复区间、导入/序列替换验证和 ID 碰撞防护。
+- requested/presented 帧协调、逐相机图像、加载编辑门禁、晚到响应隔离、显式零平面/未知高度处理。
+- scheduler 预约/实际字节、pin、取消与统一释放；FrameBuffer、height、BEV 和 world cloud 接入。
+- IndexedDB durable commit→publish、保存失败重试、undo/redo 恢复、Web Locks + fenced lease、分条追加日志及旧 envelope 自动升级。
+- 全局 QA 的持久化、编辑失效和精确 undo 恢复；相机/三视图/覆盖率缓存与生命周期修复。
+- dev/lint/test/E2E 入口修复、领域导入限制、Three 类型版本对齐、受控 lockfile、测试模式只读 probe。
 
-## 本轮范围
+## 自测结果
 
-M1 的 H0 包：差距表、语义决定（DECISIONS）、manifest v2 schema + 合法/非法样例 + 校验器、S-mini 夹具（生成器 + 独立答案 + 校验和）、R-mini 组装（真实 KITTI 数据 + 官方标注独立参考）、`verify:preflight` / `verify:domain` 可运行。
+| 验证 | 结果 |
+|---|---|
+| `pnpm test` | core 11 文件/83 用例全部通过；web-ui 无 Vitest 单测，浏览器用例单独运行 |
+| `pnpm lint` | 通过 |
+| `pnpm build` | 通过；主 JS 仍有大包警告 |
+| `pnpm --filter @labelfaster/web-ui test:e2e` | Chromium 4/4 通过：启动、编辑保存/撤销/刷新/重做、多标签写互斥、BEV 绘制/取消/撤销 |
+| `pnpm verify:preflight` | 通过；schema 样例、S-mini 66 文件/R-mini 403 文件校验通过 |
+| `node scripts/audit/architecture-probes.mjs` | 10 项定向观察符合本轮修复预期；运行前先构建 core |
 
-## 差距表
+以上为实施自测，未做独立验收，未勾选 M1 清单。E2E 使用 v1 demo，不能证明 v2 真实数据旅程、标定精度或目标规模性能。
 
-见 `docs/gap-analysis.md`（逐验收 ID：已有待验证 / 需修改 / 缺失 / 缺外部输入）。
+## M1 状态与未覆盖能力
 
-## 规范决定
+H0 数据和规范基线继续保留。H1–H4 **尚未完整完成**；本轮部分实现覆盖旧差距项，不等于 M1 通过。规范决定见 [DECISIONS](DECISIONS.md)，逐验收差距见 [gap-analysis](docs/gap-analysis.md)。
 
-见 `DECISIONS.md`（D-01 至 D-10）。关键项：世界系迁移至契约 Z-up（v1 数据不兼容，提供转换路径）；时间轴迁移至 timeUs + 半开区间；业务身份迁移至 UUID；nuScenes 保持 BLOCKED。
+- v2 Z-up/timeUs/UUID/半开区间/Float64、AttributeStore、ReviewLedger 尚未迁移；运行入口明确拒绝 v2，不能直接读 v2 S-mini/R-mini。
+- 当前资源账本只管理现有资源/预约，不是完整 encoded/decoded/transient/GPU 三阶段 Coordinator；无 Worker 解码/GPU 上传门禁及长时/L-scale 实测。
+- 局部 QA 不是完整区间复核系统，正式导出门禁、nuScenes profile 和独立读取器尚缺；UI 明示 nuScenes 为草稿。
+- 日志 checkpoint、恢复分页/容量上限、dataset/标定版本 hash、只读 Repository、dirty slot 和正式 EditScope 尚缺。
+- J01、F01–F06、完整契约 probe、CI、Python reader/流式工具及包体分拆尚待实施。
+- R-mini 相机外参链 R_rect_02 和官方参考框的渲染对齐仍需独立核验。
 
-## 完成的验收 ID（自测，非独立验收）
-
-- 无 M1 清单 ID 完整通过。H0 相关部分状态：
-  - ENV-01：部分（启动/构建/测试命令可运行；隔离 profile 与 verify:journey 未落地）
-  - DATA-01：部分（S-mini 生成器 + 独立答案 + 校验和已交付；生产加载管线尚不能读 v2 manifest → 加载路径未验证）
-  - DATA-02：部分（R-mini 组装成功且 manifest 校验通过；模态齐全：lidar/cam2/pose/BEV 底图/官方参考标注 49 轨迹；**相机外参链 R_rect_02 语义需在 H1 以渲染对齐核验**）
-  - DATA-03：未通过（现实现 Y-up/闭区间，契约 Z-up/半开——D1 迁移未完成）
-
-## 可运行命令
+## 重跑入口与数据位置
 
 ```bash
-pnpm install
-pnpm fixtures:s-mini        # 生成 S-mini（31 帧 + 独立答案 + 校验和）
-pnpm fixtures:r-mini        # 组装 R-mini（需 /tmp/kitti4d/raw_drive.zip，缺失则 BLOCKED）
-pnpm fixtures:validate      # manifest v2 schema 校验（S-mini + R-mini）
-pnpm verify:preflight       # 环境/依赖/schema/样例/夹具校验和
-pnpm verify:domain          # core 领域测试（43 用例）
-pnpm dev                    # 打开应用（demo 模式或 /?manifest=/kitti/manifest.json）
+pnpm install --frozen-lockfile
+pnpm dev
+pnpm test
+pnpm lint
+pnpm build
+pnpm --filter @labelfaster/web-ui exec playwright install chromium
+pnpm --filter @labelfaster/web-ui test:e2e
+pnpm verify:preflight
+node scripts/audit/architecture-probes.mjs
 ```
 
-退出码约定按契约 §5（0/1/2/3）；verify:journey、verify:faults、verify:exports、verify:performance 当前为 BLOCKED 占位（exit 2）。
+`verify:domain` 等同 core tests。`verify:journey`、`verify:faults`、`verify:exports`、`verify:performance` 仍为 BLOCKED 占位（exit 2），不能用上述 E2E 成功替代其结果。
 
-## 数据位置与校验和
-
-- S-mini：`fixtures/s-mini/`（manifest v2 通过 schema；独立答案 `INDEPENDENT_EXPECTED.json`：J01 关键帧、插值期望、8 个投影控制点；66 文件校验和）
-- R-mini：`fixtures/r-mini/`（200 帧 Z-up 世界系点云/图像、ENU pose、BEV 底图、官方标注参考 `reference-answers.json` 49 轨迹；403 文件校验和）
-- 生成资产本体不入库（.gitignore），校验和 + 生成器 + 获取说明入库，可重现。
-
-## 已知问题 / FAIL / BLOCKED
-
-- BLOCKED：J01 自动化、F01–F06、独立导出验证器、性能档位（对应 H2–H4）。
-- NEEDS_REVIEW：R-mini 参考轨迹框中心 Z 值（部分 ~0.1m）与渲染对齐需在 H1 核验；相机外参 R_rect_02 链路同样待渲染核验。
-- 技术债：现实现 Y-up/闭区间/字符串 ID/内存 oplog——全部列入差距表 D1/D2 迁移项，未静默变更。
-
-## 下一轮（H1）未覆盖能力
-
-v2 领域层迁移（Z-up/timeUs/UUID/半开区间/AttributeStore/ReviewLedger）、IndexedDB 持久化、手势事务 ChangeSet、FrameCoordinator、只读观测接口 `window.__LABELFASTER_TEST__.read`。
+H0 夹具保留于 `fixtures/s-mini/`（31 帧、独立期望与 66 文件校验和）和 `fixtures/r-mini/`（200 帧、官方标注参考 49 轨迹、403 文件校验和）。资产本体按现有 .gitignore 不入库；生成器及校验和可重现。`pnpm fixtures:r-mini` 仍需要 `/tmp/kitti4d/raw_drive.zip`，缺失时保持 BLOCKED。

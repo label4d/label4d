@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { boxCorners, composeBoxMatrix } from '../geometry/math';
+import { boxCorners, composeBoxMatrix, previewPose } from '../geometry/math';
 import type { Vec3 } from '../geometry/math';
 import type { TrackStore } from '../model/TrackStore';
 import type { SelectionSet } from '../model/SelectionSet';
@@ -25,7 +25,6 @@ export interface InstancePreview {
 
 const WHITE = new THREE.Color(0xffffff);
 const SELECTION_COLOR = new THREE.Color(0xfff36b);
-const VELOCITY_COLOR = new THREE.Color(0x3ddc97);
 
 /**
  * Dynamic-object rendering: one InstancedMesh for all active 3D boxes at the
@@ -46,6 +45,8 @@ export class TrackInstanceRenderer {
   private readonly lineBuf: Float32Array;
   private preview: InstancePreview | null = null;
   private lastSyncKey = '';
+  private previewKey = '';
+  private readonly geometryColors = new Float32Array(65536 * 3);
   private readonly selectionLines: DynamicLines;
   private readonly geometryLines: DynamicLines;
   private readonly velocityLines: DynamicLines;
@@ -72,12 +73,13 @@ export class TrackInstanceRenderer {
   }
 
   setPreview(preview: InstancePreview | null): void {
-    this.preview = preview;
-    this.lastSyncKey = '';
+    const key = JSON.stringify(preview ? { ...preview, ids: [...preview.ids].sort() } : null);
+    if (key === this.previewKey) return;
+    this.previewKey = key; this.preview = preview; this.lastSyncKey = '';
   }
 
   sync(frame: number, hoverId: string | null = null): void {
-    const key = `${frame}:${this.store.currentVersion}:${this.selection.currentVersion}:${hoverId ?? ''}:${this.preview ? 'p' : ''}:${this.filter.blinkLabel ?? ''}${this.filter.blinkOn ? 'B' : ''}:${this.filter.hiddenLabels.size}`;
+    const key = `${frame}:${this.store.currentVersion}:${this.selection.currentVersion}:${hoverId ?? ''}:${this.preview ? 'p' : ''}:${this.filter.blinkLabel ?? ''}${this.filter.blinkOn ? 'B' : ''}:${[...this.filter.hiddenLabels].sort().join(',')}:${[...this.filter.velocityIds].sort().join(',')}:${this.fps}`;
     if (key === this.lastSyncKey) return;
     this.lastSyncKey = key;
 
@@ -92,7 +94,7 @@ export class TrackInstanceRenderer {
       if (!state) continue;
       const adjusted = this.applyPreview(id, state.pos, state.yaw);
       composeBoxMatrix(adjusted.pos, adjusted.yaw, state.size, this.matrixScratch);
-      this.matrixObj.fromArray(Array.from(this.matrixScratch));
+      this.matrixObj.fromArray(this.matrixScratch);
       this.mesh.setMatrixAt(slot, this.matrixObj);
 
       const label = record?.meta.label ?? '';
@@ -173,21 +175,7 @@ export class TrackInstanceRenderer {
   fps = 10;
 
   private applyPreview(id: string, pos: Vec3, yaw: number): { pos: Vec3; yaw: number } {
-    const preview = this.preview;
-    if (!preview || !preview.ids.has(id)) return { pos, yaw };
-    let px = pos.x + preview.delta.x;
-    let pz = pos.z + preview.delta.z;
-    let pyaw = yaw;
-    if (preview.pivot && preview.dyaw) {
-      const dx = px - preview.pivot.x;
-      const dz = pz - preview.pivot.z;
-      const c = Math.cos(preview.dyaw);
-      const s = Math.sin(preview.dyaw);
-      px = preview.pivot.x + dx * c + dz * s;
-      pz = preview.pivot.z + -dx * s + dz * c;
-      pyaw = yaw + preview.dyaw;
-    }
-    return { pos: { x: px, y: pos.y + preview.delta.y, z: pz }, yaw: pyaw };
+    return previewPose(id, pos, yaw, this.preview);
   }
 
   private syncSelectionOutlines(ids: string[], frame: number): void {
@@ -215,7 +203,7 @@ export class TrackInstanceRenderer {
 
   private syncGeometryLines(frame: number): void {
     const geometries = this.store.geometriesAt(frame);
-    const colors = new Float32Array(this.lineBuf.length);
+    const colors = this.geometryColors;
     let v = 0;
     const color = new THREE.Color();
     for (const geom of geometries) {
@@ -252,6 +240,7 @@ export class TrackInstanceRenderer {
 
   private grow(minCapacity: number): void {
     this.group.remove(this.mesh);
+    this.mesh.geometry.dispose(); (this.mesh.material as THREE.Material).dispose();
     this.mesh.dispose();
     this.capacity = Math.max(minCapacity * 2, this.capacity * 2);
     this.mesh = this.buildMesh(this.capacity);

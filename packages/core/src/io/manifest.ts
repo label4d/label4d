@@ -40,12 +40,6 @@ export interface TilesetConfig {
   urlTemplate: string;
 }
 
-export interface HeightSource {
-  /** single RGBA-packed float32 PNG covering the tileset extent */
-  url?: string;
-  tileset?: TilesetConfig;
-}
-
 export interface BevImageConfig {
   url: string;
   originX: number;
@@ -85,15 +79,47 @@ export interface SequenceManifest {
 }
 
 export function parseEgoPoses(data: unknown, frameCount: number): Float64Array | null {
-  if (!Array.isArray(data)) return null;
-  const n = Math.min(data.length, frameCount);
-  const out = new Float64Array(n * 16);
-  for (let i = 0; i < n; i++) {
+  if (!Array.isArray(data) || data.length !== frameCount) return null;
+  const out = new Float64Array(frameCount * 16);
+  for (let i = 0; i < data.length; i++) {
     const m = data[i];
-    if (!Array.isArray(m) || m.length !== 16) continue;
-    for (let j = 0; j < 16; j++) out[i * 16 + j] = m[j];
+    if (!validTransform(m)) return null;
+    out.set(m, i * 16);
   }
-  return n > 0 ? out : null;
+  return out;
+}
+
+function validTransform(m: unknown): m is number[] {
+  if (!Array.isArray(m) || m.length !== 16 || !m.every(Number.isFinite)) return false;
+  if (Math.abs(m[3]) + Math.abs(m[7]) + Math.abs(m[11]) + Math.abs(m[15] - 1) > 1e-5) return false;
+  const det = m[0] * (m[5] * m[10] - m[9] * m[6]) - m[4] * (m[1] * m[10] - m[9] * m[2]) + m[8] * (m[1] * m[6] - m[5] * m[2]);
+  if (Math.abs(det - 1) >= 1e-3) return false;
+  for (let a = 0; a < 3; a++) for (let b = a; b < 3; b++) {
+    const dot = m[a * 4] * m[b * 4] + m[a * 4 + 1] * m[b * 4 + 1] + m[a * 4 + 2] * m[b * 4 + 2];
+    if (Math.abs(dot - (a === b ? 1 : 0)) > 1e-3) return false;
+  }
+  return true;
+}
+
+/** Runtime gate: v1 is explicit Y-up; never reinterpret a v2 Z-up document. */
+export function validateManifest(input: unknown): SequenceManifest {
+  const m = input as SequenceManifest;
+  if (!m || m.formatVersion !== 1) throw new Error('Unsupported manifest version; v2 migration is not yet enabled');
+  if (!m.id || typeof m.id !== 'string' || !Number.isSafeInteger(m.frameCount) || m.frameCount < 1 || !Number.isFinite(m.fps) || m.fps <= 0) {
+    throw new Error('Invalid sequence identity or time axis');
+  }
+  if (m.pointCloud && (m.pointCloud.format !== 'pcd' || !m.pointCloud.urlTemplate)) throw new Error('Unsupported point cloud source');
+  const ids = new Set<string>();
+  for (const c of m.cameras ?? []) {
+    if (!c.id || ids.has(c.id) || !['pinhole', 'fisheye_equidistant', 'fisheye_equisolid'].includes(c.model) ||
+        !Number.isSafeInteger(c.width) || c.width <= 0 || !Number.isSafeInteger(c.height) || c.height <= 0 ||
+        !c.imageTemplate || !validTransform(c.cameraToEgo) || !c.intrinsics ||
+        ![c.intrinsics.fx, c.intrinsics.fy, c.intrinsics.cx, c.intrinsics.cy].every(Number.isFinite) || c.intrinsics.fx <= 0 || c.intrinsics.fy <= 0 ||
+        (c.distortion && !c.distortion.every(Number.isFinite))) throw new Error('Invalid camera calibration');
+    ids.add(c.id);
+  }
+  if (m.egoPoses && typeof m.egoPoses !== 'string' && !parseEgoPoses(m.egoPoses, m.frameCount)) throw new Error('Invalid ego trajectory');
+  return structuredClone(m);
 }
 
 export function manifestLabels(manifest: SequenceManifest): LabelDef[] {

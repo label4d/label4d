@@ -280,3 +280,18 @@ export function pointSegmentDistance(
   const cy = ay + dy * t;
   return Math.hypot(px - cx, py - cy);
 }
+
+/** Shared transient selection transform; never writes authoritative geometry. */
+export function previewPose(id: string, pos: Vec3, yaw: number, preview: {
+  ids: Set<string>; delta: Vec3; pivot?: Vec3; dyaw?: number;
+} | null): { pos: Vec3; yaw: number } {
+  if (!preview || !preview.ids.has(id)) return { pos, yaw };
+  let x = pos.x + preview.delta.x, z = pos.z + preview.delta.z;
+  if (preview.pivot && preview.dyaw) {
+    const dx = x - preview.pivot.x, dz = z - preview.pivot.z;
+    const c = Math.cos(preview.dyaw), s = Math.sin(preview.dyaw);
+    x = preview.pivot.x + dx * c + dz * s;
+    z = preview.pivot.z - dx * s + dz * c;
+  }
+  return { pos: { x, y: pos.y + preview.delta.y, z }, yaw: yaw + (preview.dyaw ?? 0) };
+}

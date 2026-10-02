@@ -19,8 +19,9 @@
     "three": "^0.160.0"
   },
   "devDependencies": {
-    "@types/three": "^0.180.0",
+    "@types/three": "^0.160.0",
     "eslint": "^8.56.0",
+    "fake-indexeddb": "6.2.4",
     "tsup": "^6.7.0",
     "typescript": "^5.3.3",
     "vitest": "^0.34.6"

@@ -12,6 +12,8 @@ interface TileEntry {
 function disposeMesh(mesh: THREE.Mesh): void {
   mesh.geometry.dispose();
   const material = mesh.material as THREE.MeshBasicMaterial;
+  const image = material.map?.source.data;
+  if (image && 'close' in image) image.close();
   material.map?.dispose();
   material.dispose();
 }
@@ -22,12 +24,16 @@ function disposeMesh(mesh: THREE.Mesh): void {
  * Texture contract: decoded with imageOrientation:'flipY' and uploaded with
  * flipY=false → PNG top row lands at world minZ (originZ) edge.
  */
+let nextRenderer = 0;
 export class BevTileRenderer {
   readonly group = new THREE.Group();
 
   private tiles = new Map<string, TileEntry>();
   private desired = new Set<string>();
   private overviewReady = false;
+  private disposed = false;
+  private readonly prefix = `bev:${++nextRenderer}:`;
+  private failures = new Set<string>();
 
   constructor(
     private readonly pyramid: BevPyramid,
@@ -39,8 +45,11 @@ export class BevTileRenderer {
     if (this.overviewReady) return;
     const rect = this.pyramid.tileWorldRect(0, 0, 0);
     try {
-      const image = await this.loadImage(this.pyramid.tileUrl(0, 0, 0));
-      const mesh = this.buildMesh('bev:overview', 0, rect, image);
+      const key = `${this.prefix}overview`;
+      const mesh = await this.scheduler.request(key, 80, this.pyramid.tileBytesEstimate(), () =>
+        this.loadImage(this.pyramid.tileUrl(0, 0, 0)).then((image) => this.buildMesh(key, 0, rect, image)),
+        { pinned: true, dispose: (mesh) => { this.group.remove(mesh); disposeMesh(mesh); }, bytes: (mesh) => this.meshBytes(mesh) });
+      if (this.disposed || !this.scheduler.isResident(key, mesh)) { this.scheduler.release(key); return; }
       this.group.add(mesh);
       this.overviewReady = true;
     } catch {
@@ -49,24 +58,25 @@ export class BevTileRenderer {
   }
 
   updateView(rect: WorldRect, screenMpp: number): void {
+    if (this.disposed) return;
     const level = this.pyramid.levelForMpp(screenMpp);
     const coords: TileCoord[] = this.pyramid.tilesForRect(rect, level);
 
     this.desired.clear();
     for (const coord of coords) {
-      const key = `bev:${coord.level}:${coord.x}:${coord.y}`;
+      const key = `${this.prefix}${coord.level}:${coord.x}:${coord.y}`;
       this.desired.add(key);
       const entry = this.tiles.get(key);
-      if (!entry) {
+      if (!entry && !this.failures.has(key)) {
         this.request(key, coord.level, coord.x, coord.y);
-      } else {
+      } else if (entry) {
         this.scheduler.touch(key);
       }
     }
 
-    for (const [key, entry] of this.tiles) {
-      if (!this.desired.has(key) && (entry.mesh || this.scheduler.stats().loaded > 0)) {
-        this.scheduler.release(key); // onEvict → evictResource → dispose
+    for (const [key] of this.tiles) {
+      if (!this.desired.has(key)) {
+        this.scheduler.cancel(key); this.tiles.delete(key);
       }
     }
   }
@@ -80,8 +90,10 @@ export class BevTileRenderer {
   }
 
   dispose(): void {
-    for (const [key] of this.tiles) this.scheduler.release(key);
-    this.tiles.clear();
+    this.disposed = true;
+    for (const [key] of this.tiles) this.scheduler.cancel(key);
+    this.scheduler.cancel(`${this.prefix}overview`);
+    this.tiles.clear(); this.desired.clear();
   }
 
   private request(key: string, level: number, x: number, y: number): void {
@@ -92,19 +104,26 @@ export class BevTileRenderer {
     const url = this.pyramid.tileUrl(level, x, y);
     this.scheduler
       .request<THREE.Mesh>(key, -1, this.pyramid.tileBytesEstimate(), () =>
-        loadImage(url).then((image) => this.buildMesh(key, level, rect, image))
+        loadImage(url).then((image) => this.buildMesh(key, level, rect, image)),
+        { dispose: (mesh) => this.evictResource(key, mesh), bytes: (mesh) => this.meshBytes(mesh) }
       )
       .then((mesh) => {
-        if (!this.desired.has(key)) {
+        if (this.disposed || !this.desired.has(key) || !this.scheduler.isResident(key, mesh)) {
           this.scheduler.release(key);
           return;
         }
         entry.mesh = mesh;
         this.group.add(mesh);
       })
-      .catch(() => {
+      .catch((error) => {
+        if (error?.name !== 'AbortError') this.failures.add(key);
         this.tiles.delete(key);
       });
+  }
+
+  private meshBytes(mesh: THREE.Mesh): number {
+    const image = (mesh.material as THREE.MeshBasicMaterial).map!.source.data;
+    return image.width * image.height * 4 + (mesh.geometry.getAttribute('position').array.byteLength);
   }
 
   private buildMesh(key: string, level: number, rect: WorldRect, image: AnyImage): THREE.Mesh {

@@ -32,7 +32,7 @@ export class AttributeBadgeRenderer {
   }
 
   sync(frame: number, store: TrackStore, selection: SelectionSet, hoverId: string | null, hiddenLabels?: Set<string>): void {
-    const key = `${frame}:${store.currentVersion}:${selection.currentVersion}:${hoverId ?? ''}:${this.options.showAll}:${hiddenLabels ? hiddenLabels.size : 0}`;
+    const key = `${frame}:${store.currentVersion}:${selection.currentVersion}:${hoverId ?? ''}:${this.options.showAll}:${hiddenLabels ? [...hiddenLabels].sort().join(',') : ''}`;
     if (key === this.lastKey) return;
     this.lastKey = key;
 

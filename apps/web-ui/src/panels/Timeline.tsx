@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSession, useSessionTick } from '../session/SessionProvider';
 import { colorForLabel } from '@labelfaster/core';
 
@@ -15,7 +15,6 @@ export function Timeline() {
   useSessionTick(['frameChanged', 'storeChanged', 'selectionChanged']);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollRef = useRef(0);
-  const [hoverRow, setHoverRow] = useState<string | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;

@@ -86,6 +86,15 @@ function Shortcuts() {
   return null;
 }
 
+function SessionError() {
+  const session = useSession();
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => session.events.on('error', ({ message }) => setError(message)), [session]);
+  return error ? <div role="alert" className="flex items-center justify-between bg-red-950 px-3 py-1 text-xs text-red-100">
+    <span>{error}</span><button onClick={() => setError(null)}>关闭</button>
+  </div> : null;
+}
+
 function Workspace() {
   const session = useSession();
   useSessionTick(['manifestLoaded']);
@@ -95,6 +104,7 @@ function Workspace() {
     <div className="flex h-screen w-screen flex-col bg-[#0b0e13] text-slate-200">
       <Shortcuts />
       <Toolbar />
+      <SessionError />
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-1 bg-[#10161f] px-2 py-1">

@@ -84,6 +84,7 @@ export class SetKeyframeCommand extends StoreCommand {
   readonly name = 'set_keyframe';
   readonly payload: { id: TrackId; frame: number; state: StateJSON };
   private previous: StateJSON | null = null;
+  private interval: { startFrame: number; endFrame: number } | null = null;
   constructor(private store: TrackStore, id: TrackId, frame: number, state: KeyframeState) {
     super();
     this.payload = { id, frame, state: stateToJSON(state) };
@@ -93,6 +94,9 @@ export class SetKeyframeCommand extends StoreCommand {
   }
   apply(): void {
     const { id, frame, state } = this.p;
+    const meta = this.store.getTrack(id)?.meta;
+    if (!meta) throw new Error(`Unknown track: ${id}`);
+    this.interval = { startFrame: meta.startFrame, endFrame: meta.endFrame };
     const existing = this.store.getKeyframes(id);
     if (existing) {
       const idx = existing.frames.indexOf(frame);
@@ -113,6 +117,7 @@ export class SetKeyframeCommand extends StoreCommand {
     const { id, frame } = this.p;
     if (this.previous) this.store.setKeyframe(id, frame, jsonToState(this.previous));
     else this.store.removeKeyframe(id, frame);
+    if (this.interval) this.store.setTrackMeta(id, this.interval);
     this.applied = false;
   }
 }
@@ -272,6 +277,11 @@ export class SplitTrackCommand extends StoreCommand {
     const { id, frame, newId } = this.payload as { id: TrackId; frame: number; newId: TrackId };
     const original = this.store.serializeTrack(id);
     if (!original) return;
+    if (!Number.isSafeInteger(frame) || frame <= original.meta.startFrame || frame > original.meta.endFrame || this.store.getTrack(newId)) {
+      throw new Error('Split requires two non-empty intervals and a new identity');
+    }
+    const left = this.store.resolveState(id, frame - 1)!;
+    const right = this.store.resolveState(id, frame)!;
     this.original = original;
     const head: SerializedTrack = {
       meta: { ...original.meta, endFrame: frame - 1 },
@@ -304,9 +314,15 @@ export class SplitTrackCommand extends StoreCommand {
         original.keyframes.size[i * 3 + 2]
       );
     }
-    this.store.restoreTrack(head);
-    if (tail.keyframes.frames.length > 0) this.store.restoreTrack(tail);
-    else this.store.setTrackMeta(id, { endFrame: frame - 1 });
+    const addBoundary = (track: SerializedTrack, f: number, state: KeyframeState) => {
+      if (track.keyframes.frames.includes(f)) return;
+      track.keyframes.frames.push(f);
+      track.keyframes.pos.push(state.pos.x, state.pos.y, state.pos.z);
+      track.keyframes.yaw.push(state.yaw);
+      track.keyframes.size.push(state.size.x, state.size.y, state.size.z);
+    };
+    addBoundary(head, frame - 1, left); addBoundary(tail, frame, right);
+    this.store.atomic(() => { this.store.restoreTrack(head); this.store.restoreTrack(tail); });
     this.applied = true;
   }
   undo(): void {
@@ -333,9 +349,21 @@ export class MergeTracksCommand extends StoreCommand {
     const { idA, idB } = this.payload as { idA: TrackId; idB: TrackId };
     const a = this.store.serializeTrack(idA);
     const b = this.store.serializeTrack(idB);
-    if (!a || !b) return;
-    this.capturedA = a;
-    this.capturedB = b;
+    if (!a || !b) throw new Error('Both tracks are required for merge');
+    const adjacent = a.meta.endFrame + 1 === b.meta.startFrame || b.meta.endFrame + 1 === a.meta.startFrame;
+    if (idA === idB || !adjacent || a.meta.label !== b.meta.label || a.meta.interpolation !== b.meta.interpolation ||
+        a.meta.source !== b.meta.source || JSON.stringify(a.meta.attributes) !== JSON.stringify(b.meta.attributes)) {
+      throw new Error('Merge requires adjacent tracks of the same class and compatible metadata');
+    }
+    // Add held boundary states so the merged track does not change either original curve.
+    for (const track of [a, b]) for (const f of [track.meta.startFrame, track.meta.endFrame]) {
+      if (track.keyframes.frames.includes(f)) continue;
+      const state = this.store.resolveState(track.meta.id, f)!;
+      track.keyframes.frames.push(f); track.keyframes.pos.push(state.pos.x, state.pos.y, state.pos.z);
+      track.keyframes.yaw.push(state.yaw); track.keyframes.size.push(state.size.x, state.size.y, state.size.z);
+    }
+    this.capturedA = this.store.serializeTrack(idA);
+    this.capturedB = this.store.serializeTrack(idB);
     const merged: SerializedTrack = {
       meta: {
         ...a.meta,
@@ -373,7 +401,7 @@ export class MergeTracksCommand extends StoreCommand {
   }
   undo(): void {
     if (!this.applied || !this.capturedA || !this.capturedB) return;
-    const { idA, idB } = this.payload as { idA: TrackId; idB: TrackId };
+    const { idA } = this.payload as { idA: TrackId; idB: TrackId };
     this.store.deleteTrack(idA);
     this.store.restoreTrack(this.capturedA);
     this.store.restoreTrack(this.capturedB);

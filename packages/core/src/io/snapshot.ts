@@ -1,4 +1,5 @@
-import type { TrackStore } from '../model/TrackStore';
+import { validateTrack } from '../model/validation';
+import { TrackStore } from '../model/TrackStore';
 import type { SerializedGeometry, SerializedTrack, TrackMeta } from '../model/types';
 
 // ---- pure-JS base64 (browser + node safe, chunked to avoid stack overflow) ----
@@ -24,7 +25,8 @@ const B64_LOOKUP = new Int16Array(128).fill(-1);
 for (let i = 0; i < B64_ALPHABET.length; i++) B64_LOOKUP[B64_ALPHABET.charCodeAt(i)] = i;
 
 export function base64ToBytes(text: string): Uint8Array {
-  const clean = text.replace(/[^A-Za-z0-9+/]/g, '');
+  if (typeof text !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(text)) throw new Error('Invalid base64 payload');
+  const clean = text.replace(/=/g, '');
   const len = clean.length;
   const pad = (4 - (len % 4)) % 4;
   const padded = clean + '='.repeat(pad);
@@ -103,7 +105,7 @@ export function serializeStore(
     sequenceId: info.sequenceId,
     frameCount: info.frameCount,
     createdAt: new Date().toISOString(),
-    qa: info.qa,
+    qa: info.qa ? { ...info.qa } : undefined,
     tracks,
     geometries,
   };
@@ -117,6 +119,7 @@ function normalizeSnapshotTrack(t: SnapshotTrack): SnapshotTrack {
   if (!plain || !Array.isArray(plain.frames)) {
     throw new Error(`snapshot track ${String((t.meta as { id?: string }).id)}: no keyframes`);
   }
+  validateTrack({ meta: t.meta, keyframes: plain, frameAttributes: t.frameAttributes });
   const count = plain.frames.length;
   return {
     ...t,
@@ -131,17 +134,28 @@ function normalizeSnapshotTrack(t: SnapshotTrack): SnapshotTrack {
 }
 
 export function applySnapshot(store: TrackStore, doc: SnapshotDocument): void {
+  if (!doc || doc.formatVersion !== 1 || typeof doc.sequenceId !== 'string' ||
+      !Number.isSafeInteger(doc.frameCount) || doc.frameCount < 1 || !Array.isArray(doc.tracks) || !Array.isArray(doc.geometries)) {
+    throw new Error('Unsupported or invalid snapshot; v2 requires explicit migration');
+  }
+  if (doc.qa && !['pending', 'pass', 'reject'].includes(doc.qa.status)) throw new Error('Invalid review status');
+  const candidate = new TrackStore();
+  const ids = new Set<string>();
   for (const raw of doc.tracks) {
     const t = normalizeSnapshotTrack(raw as SnapshotTrack);
+    if (ids.has(t.meta.id)) throw new Error('Duplicate object identity');
+    ids.add(t.meta.id);
+    if (!Number.isSafeInteger(t.kf.count) || t.kf.count < 1) throw new Error('Invalid keyframe count');
+    if (t.meta.endFrame >= doc.frameCount) throw new Error('Track is outside the sequence');
     const framesBytes = base64ToBytes(t.kf.frames);
     const posBytes = base64ToBytes(t.kf.pos);
     const yawBytes = base64ToBytes(t.kf.yaw);
     const sizeBytes = base64ToBytes(t.kf.size);
     if (
-      framesBytes.length < t.kf.count * 4 ||
-      posBytes.length < t.kf.count * 12 ||
-      yawBytes.length < t.kf.count * 4 ||
-      sizeBytes.length < t.kf.count * 12
+      framesBytes.length !== t.kf.count * 4 ||
+      posBytes.length !== t.kf.count * 12 ||
+      yawBytes.length !== t.kf.count * 4 ||
+      sizeBytes.length !== t.kf.count * 12
     ) {
       throw new Error(`snapshot track ${String(t.meta.id)}: keyframe payload truncated`);
     }
@@ -149,7 +163,7 @@ export function applySnapshot(store: TrackStore, doc: SnapshotDocument): void {
     const pos = new Float32Array(posBytes.buffer, posBytes.byteOffset, t.kf.count * 3);
     const yaw = new Float32Array(yawBytes.buffer, yawBytes.byteOffset, t.kf.count);
     const size = new Float32Array(sizeBytes.buffer, sizeBytes.byteOffset, t.kf.count * 3);
-    store.restoreTrack({
+    candidate.restoreTrack({
       meta: t.meta,
       keyframes: {
         frames: Array.from(frames),
@@ -160,6 +174,12 @@ export function applySnapshot(store: TrackStore, doc: SnapshotDocument): void {
       frameAttributes: t.frameAttributes,
     });
   }
-  for (const g of doc.geometries) store.restoreGeometry(g);
+  for (const g of doc.geometries) {
+    if (ids.has(g.meta.id)) throw new Error('Duplicate object identity');
+    ids.add(g.meta.id);
+    if (g.meta.endFrame >= doc.frameCount) throw new Error('Geometry is outside the sequence');
+    candidate.restoreGeometry(g);
+  }
+  store.replaceWith(candidate);
 }
 

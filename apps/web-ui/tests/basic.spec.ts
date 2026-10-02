@@ -16,10 +16,11 @@ test.describe('Labelfaster App', () => {
 
     await page.goto('/', { waitUntil: 'networkidle' });
 
-    await expect(page.locator('text=Labelfaster')).toHaveCount(1);
+    await expect(page.getByText('Labelfaster 4D', { exact: true })).toHaveCount(1);
     const canvasLocator = page.locator('canvas');
-    await expect(canvasLocator).toHaveCount(2);
+    await expect(canvasLocator).toHaveCount(7);
 
+    await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存');
     expect(pageErrors, 'page errors').toEqual([]);
     expect(consoleErrors, 'console errors').toEqual([]);
   });

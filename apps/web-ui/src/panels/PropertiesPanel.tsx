@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useSession, useSessionTick } from '../session/SessionProvider';
-import { SetKeyframeCommand, SetTrackMetaCommand, UpdateGeometryCommand } from '@labelfaster/core';
 import type { AttributeDef, GeometryKind, KeyframeState } from '@labelfaster/core';
 
 function NumberField(props: { label: string; value: number; step?: number; onCommit: (v: number) => void }) {
@@ -74,7 +73,7 @@ function AttributeRow(props: { def: AttributeDef; value: string | number | boole
 
 export function PropertiesPanel() {
   const session = useSession();
-  useSessionTick(['storeChanged', 'selectionChanged', 'frameChanged']);
+  useSessionTick(['storeChanged', 'selectionChanged', 'frameChanged', 'saveChanged']);
   const [copyFrame, setCopyFrame] = useState('');
 
   const selected = session.selection.all();
@@ -120,7 +119,7 @@ export function PropertiesPanel() {
   })();
 
   return (
-    <div className="flex-1 overflow-y-auto px-3 py-2 text-[11px] text-slate-300">
+    <fieldset disabled={!session.canEdit} className="flex-1 overflow-y-auto px-3 py-2 text-[11px] text-slate-300">
       <div className="mb-1 flex items-center gap-2">
         <b className="text-white">{track.meta.label}·{track.meta.id.slice(-4)}</b>
           {track.meta.source === 'model' && (
@@ -136,7 +135,7 @@ export function PropertiesPanel() {
           <select
             className="w-24 rounded bg-[#1d2530] px-1 py-0.5 text-[11px] outline-none"
             value={track.meta.label}
-            onChange={(e) => session.history.push(new SetTrackMetaCommand(session.store, track.meta.id, { label: e.target.value }))}
+            onChange={(e) => session.setTrackMeta(track.meta.id, { label: e.target.value })}
           >
             {session.labels.filter((l) => l.dynamic).map((l) => (
               <option key={l.name} value={l.name}>{l.name}</option>
@@ -221,13 +220,13 @@ export function PropertiesPanel() {
             )}
           </>
         ) : null}
-      </div>
+      </fieldset>
     );
   }
 
   if (geometry) {
     return (
-      <div className="flex-1 overflow-y-auto px-3 py-2 text-[11px] text-slate-300">
+      <fieldset disabled={!session.canEdit} className="flex-1 overflow-y-auto px-3 py-2 text-[11px] text-slate-300">
         <div className="mb-1"><b className="text-white">{geometry.meta.kind}·{geometry.meta.id.slice(-4)}</b></div>
         <div className="text-[10px] text-slate-500">顶点 {geometry.vertices.length / 3} 个 · 闭合 {geometry.meta.closed ? '是' : '否'}</div>
         <div className="mt-2 flex gap-1">
@@ -235,12 +234,9 @@ export function PropertiesPanel() {
             className="rounded bg-[#1d2530] px-1 py-0.5 text-[11px] outline-none"
             value={geometry.meta.kind}
             onChange={(e) =>
-              session.history.push(
-                new UpdateGeometryCommand(session.store, geometry.meta.id, undefined, {
-                  kind: e.target.value as GeometryKind,
-                  label: e.target.value,
-                })
-              )
+              session.updateGeometry(geometry.meta.id, {
+                kind: e.target.value as GeometryKind, label: e.target.value,
+              })
             }
           >
             {session.labels.filter((l) => !l.dynamic).map((l) => (
@@ -249,7 +245,7 @@ export function PropertiesPanel() {
           </select>
           <button className="rounded bg-[#7a2430] px-2 py-1 text-rose-200 hover:bg-[#952c3c]" onClick={() => session.deleteSelection()}>删除</button>
         </div>
-      </div>
+      </fieldset>
     );
   }
 
@@ -271,6 +267,6 @@ export function PropertiesPanel() {
 
   function pushKeyframe(state: KeyframeState) {
     if (!track) return;
-    session.history.push(new SetKeyframeCommand(session.store, track.meta.id, frame, state));
+    session.editKeyframe(track.meta.id, frame, state);
   }
 }

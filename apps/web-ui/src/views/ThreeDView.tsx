@@ -87,8 +87,8 @@ export function ThreeDView() {
     let disposed = false;
     const potreeDebug = {
       setLayerMode: (m: string) => { dbgRef.current.layerMode = m as typeof dbgLayerMode; dbgLayerMode = m as typeof dbgLayerMode; },
-      setNodeColor: (v: boolean) => { dbgRef.current.nodeColor = v; dbgNodeColor = v; },
-      setShowBounds: (v: boolean) => { dbgRef.current.showBounds = v; dbgShowBounds = v; boundsGroup.visible = v; },
+      setNodeColor: (v: boolean) => { dbgRef.current.nodeColor = v; },
+      setShowBounds: (v: boolean) => { dbgRef.current.showBounds = v; boundsGroup.visible = v; },
       getStats: () => ({ loaded: potreeChunks.size, pending: pendingNodes.size,
         selected: desired.size, pointBudget: selectedBudget,
         drawn: [...potreeChunks.values()].reduce((sum, e) => sum + (e.points.visible ? e.points.geometry.drawRange.count : 0), 0),
@@ -103,15 +103,17 @@ export function ThreeDView() {
       setAnnotationsVisible: (v: boolean) => { instance.group.visible = v; },
       setEgoVisible: (v: boolean) => { egoGroup.visible = v; },
     };
-    (window as unknown as { __lfPotreeDebug?: unknown }).__lfPotreeDebug = potreeDebug;
+    if (import.meta.env.DEV) (window as unknown as { __lfPotreeDebug?: unknown }).__lfPotreeDebug = potreeDebug;
     const ensureWorldOverlay = () => {
       const manifest = session.manifest as { worldCloud?: { indexUrl: string } } | null;
       if (overlay || !manifest?.worldCloud) return;
-      overlay = new WorldCloudOverlay((url) =>
-        fetch(url).then((r) => r.arrayBuffer())
-      );
+      overlay = new WorldCloudOverlay(async (url, signal) => {
+        const response = await fetch(url, { signal });
+        if (!response.ok) throw new Error(`World cloud HTTP ${response.status}`);
+        return response.arrayBuffer();
+      }, session.scheduler);
       scene.add(overlay.group);
-      void overlay.load(manifest.worldCloud.indexUrl).then(() => { if (!disposed && overlay) overlay.enabled = true; });
+      void overlay.load(manifest.worldCloud.indexUrl).then(() => { if (!disposed && overlay) overlay.enabled = true; }).catch((error) => { if (!disposed) session.events.emit('error', { message: String(error) }); });
     };
     ensureWorldOverlay();
     const offOverlay = session.events.on('manifestLoaded', ensureWorldOverlay);
@@ -185,8 +187,6 @@ export function ThreeDView() {
     const dbgRef = { current: { layerMode: 'all' as 'all' | 'coarse' | 'detail', nodeColor: false, showBounds: false, fixedPixel: true, sampleRatio: 1 } };
     let dbgLayerMode: 'all' | 'coarse' | 'detail' = 'all'; // all=全显示, coarse=只level≤2, detail=只细节
     dbgRef.current = { layerMode: 'all', nodeColor: false, showBounds: false, fixedPixel: true, sampleRatio: 1 };
-    let dbgNodeColor = false;   // 按节点随机着色
-    let dbgShowBounds = false;  // 画节点包围盒
     const boundsGroup = new THREE.Group();
     boundsGroup.visible = false;
     scene.add(boundsGroup);
@@ -425,8 +425,7 @@ export function ThreeDView() {
       badges.dispose();
       renderer.dispose();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session, session.manifest]);
 
   return (
     <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">

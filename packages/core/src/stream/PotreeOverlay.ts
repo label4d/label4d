@@ -76,8 +76,6 @@ export const defaultNetClient: NetClient = {
 
 const BYTES_PER_NODE = 22; // [type u8][childMask u8][numPoints u32][byteOffset i64][byteSize i64]
 
-const TYPE_NORMAL = 0;
-const TYPE_LEAF = 1;
 const TYPE_PROXY = 2;
 
 /**

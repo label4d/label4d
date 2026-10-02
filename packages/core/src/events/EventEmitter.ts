@@ -25,7 +25,10 @@ export class EventEmitter<E extends object> {
     const set = this.handlers.get(event);
     if (!set || set.size === 0) return;
     for (const handler of [...set]) {
-      (handler as Handler<E[K]>)(payload);
+      // Observers run after commit; their failure must not turn a durable commit
+      // into a reported save failure or prevent other views from updating.
+      try { (handler as Handler<E[K]>)(payload); }
+      catch (error) { console.error('Event observer failed', event, error); }
     }
   }
 

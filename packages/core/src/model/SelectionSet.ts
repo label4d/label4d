@@ -13,31 +13,13 @@ export class SelectionSet {
   private version = 0;
 
   select(ids: readonly string[], mode: SelectionMode = 'replace'): boolean {
-    const next = new Set(this.ids);
-    let mutated = false;
-    for (const id of ids) {
-      if (mode === 'replace') {
-        if (!next.has(id)) mutated = true;
-        next.clear();
-        next.add(id);
-        mode = 'add';
-      } else if (mode === 'add') {
-        if (!next.has(id)) {
-          next.add(id);
-          mutated = true;
-        }
-      } else {
-        if (next.has(id)) {
-          next.delete(id);
-          mutated = true;
-        } else {
-          next.add(id);
-          mutated = true;
-        }
-      }
+    const next = mode === 'replace' ? new Set(ids) : new Set(this.ids);
+    if (mode !== 'replace') for (const id of ids) {
+      if (mode === 'add') next.add(id);
+      else if (next.has(id)) next.delete(id);
+      else next.add(id);
     }
-    if (mode === 'replace' && next.size === 0 && this.ids.size > 0) mutated = true;
-    if (!mutated) return false;
+    if (next.size === this.ids.size && [...next].every((id) => this.ids.has(id))) return false;
     this.ids = next;
     this.version++;
     this.events.emit('changed', { version: this.version });

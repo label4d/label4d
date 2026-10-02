@@ -1,6 +1,6 @@
 import { EventEmitter } from '../events/EventEmitter';
+import { validateAttributes, validateGeometry, validateMeta, validateState, validateTrack } from './validation';
 import { lerp, lerpYaw } from '../geometry/math';
-import type { Vec3 } from '../geometry/math';
 import type {
   GeometryId,
   GeometryMeta,
@@ -35,6 +35,11 @@ export interface StoreChange {
 
 export interface TrackStoreEvents {
   changed: StoreChange;
+}
+
+export interface StorePatch {
+  tracks: Array<{ id: string; value: SerializedTrack | null }>;
+  geometries: Array<{ id: string; value: SerializedGeometry | null }>;
 }
 
 const emptyKeyframes = (): KeyframeData => ({
@@ -140,22 +145,113 @@ export class TrackStore {
   private intervalIndex: { ids: TrackId[]; starts: Int32Array } | null = null;
   private trackCounter = 0;
   private geometryCounter = 0;
+  private transaction: { tracks: Map<string, TrackRecord | undefined>; geometries: Map<string, GeometryRecord | undefined>; changed: boolean } | null = null;
+
+  /** Evaluate an edit without publishing it. The returned patches contain only affected aggregates. */
+  stage(fn: () => void): { before: StorePatch; after: StorePatch } {
+    if (this.transaction) throw new Error('Cannot stage inside another transaction');
+    const tx = { tracks: new Map<string, TrackRecord | undefined>(), geometries: new Map<string, GeometryRecord | undefined>(), changed: false };
+    const order = this.trackOrder.slice(), geometryOrder = this.geometryOrder.slice();
+    this.transaction = tx;
+    try {
+      fn();
+      const after: StorePatch = {
+        tracks: [...tx.tracks.keys()].map((id) => ({ id, value: this.serializeTrack(id) })),
+        geometries: [...tx.geometries.keys()].map((id) => ({ id, value: this.serializeGeometry(id) })),
+      };
+      const before: StorePatch = {
+        tracks: [...tx.tracks].map(([id, r]) => ({ id, value: r ? {
+          meta: structuredClone(r.meta), keyframes: { frames: [...r.kf.frames], pos: [...r.kf.pos], yaw: [...r.kf.yaw], size: [...r.kf.size] },
+          frameAttributes: [...r.frameAttrs].map(([frame, attrs]) => ({ frame, attrs: { ...attrs } })),
+        } : null })),
+        geometries: [...tx.geometries].map(([id, r]) => ({ id, value: r ? { meta: structuredClone(r.meta), vertices: [...r.vertices] } : null })),
+      };
+      return { before, after };
+    } finally {
+      for (const [id, r] of tx.tracks) { if (r) this.trackMap.set(id, r); else this.trackMap.delete(id); }
+      for (const [id, r] of tx.geometries) { if (r) this.geometryMap.set(id, r); else this.geometryMap.delete(id); }
+      this.trackOrder = order; this.geometryOrder = geometryOrder;
+      this.intervalIndex = null; this.transaction = null;
+    }
+  }
+
+  applyPatch(patch: StorePatch): void {
+    if (!patch || !Array.isArray(patch.tracks) || !Array.isArray(patch.geometries)) throw new Error('Invalid document patch');
+    const ids = new Set<string>();
+    for (const entry of [...patch.tracks, ...patch.geometries]) {
+      if (!entry.id || ids.has(entry.id) || (entry.value && entry.value.meta.id !== entry.id)) throw new Error('Invalid patch identity');
+      ids.add(entry.id);
+    }
+    this.atomic(() => {
+      for (const { id, value } of patch.tracks) { if (value) this.restoreTrack(value); else this.deleteTrack(id); }
+      for (const { id, value } of patch.geometries) { if (value) this.restoreGeometry(value); else this.deleteGeometry(id); }
+    });
+  }
+
+  /** Copy only affected aggregates; publish one change after a successful transaction. */
+  atomic(fn: () => void): void {
+    if (this.transaction) { fn(); return; }
+    const tx = { tracks: new Map<string, TrackRecord | undefined>(), geometries: new Map<string, GeometryRecord | undefined>(), changed: false };
+    const order = this.trackOrder.slice(), geometryOrder = this.geometryOrder.slice();
+    this.transaction = tx;
+    try { fn(); } catch (error) {
+      for (const [id, record] of tx.tracks) { if (record) this.trackMap.set(id, record); else this.trackMap.delete(id); }
+      for (const [id, record] of tx.geometries) { if (record) this.geometryMap.set(id, record); else this.geometryMap.delete(id); }
+      this.trackOrder = order; this.geometryOrder = geometryOrder;
+      this.intervalIndex = null;
+      throw error;
+    } finally { this.transaction = null; }
+    if (tx.changed) this.touch(new Set(tx.tracks.keys()), new Set(tx.geometries.keys()));
+  }
+
+  private captureTrack(id: string): void {
+    const tx = this.transaction;
+    if (!tx || tx.tracks.has(id)) return;
+    const record = this.trackMap.get(id);
+    tx.tracks.set(id, record ? { meta: structuredClone(record.meta), kf: record.kf,
+      frameAttrs: new Map([...record.frameAttrs].map(([f, attrs]) => [f, { ...attrs }])) } : undefined);
+  }
+
+  private captureGeometry(id: string): void {
+    const tx = this.transaction;
+    if (!tx || tx.geometries.has(id)) return;
+    const record = this.geometryMap.get(id);
+    tx.geometries.set(id, record ? { meta: structuredClone(record.meta), vertices: record.vertices } : undefined);
+  }
+
+  clear(): void {
+    this.atomic(() => {
+      for (const id of this.trackMap.keys()) this.deleteTrack(id);
+      for (const id of this.geometryMap.keys()) this.deleteGeometry(id);
+    });
+  }
+
+  replaceWith(other: TrackStore): void {
+    this.atomic(() => {
+      this.clear();
+      for (const track of other.listTracks()) this.restoreTrack(other.serializeTrack(track.meta.id)!);
+      for (const geometry of other.listGeometries()) this.restoreGeometry(other.serializeGeometry(geometry.meta.id)!);
+    });
+  }
 
   get currentVersion(): number {
     return this.version;
   }
 
   nextTrackId(): TrackId {
-    this.trackCounter++;
-    return `trk_${String(this.trackCounter).padStart(6, '0')}`;
+    let id: string;
+    do { id = `trk_${String(++this.trackCounter).padStart(6, '0')}`; } while (this.trackMap.has(id));
+    return id;
   }
 
   nextGeometryId(): GeometryId {
-    this.geometryCounter++;
-    return `geo_${String(this.geometryCounter).padStart(6, '0')}`;
+    let id: string;
+    do { id = `geo_${String(++this.geometryCounter).padStart(6, '0')}`; } while (this.geometryMap.has(id));
+    return id;
   }
 
   private touch(tracks?: Set<TrackId> | null, geometries?: Set<GeometryId> | null): void {
+    if (this.transaction) { this.transaction.changed = true; this.intervalIndex = null; return; }
     this.version++;
     if (tracks === null || tracks === undefined) this.intervalIndex = null;
     else if (tracks.size > 0) this.intervalIndex = null;
@@ -173,9 +269,10 @@ export class TrackStore {
     keyframes?: SerializedKeyframes,
     frameAttributes?: Array<{ frame: number; attrs: Record<string, string | number | boolean> }>
   ): TrackRecord {
+    this.captureTrack(meta.id);
     const frameAttrs = new Map<number, Record<string, string | number | boolean>>();
     for (const entry of frameAttributes ?? []) frameAttrs.set(entry.frame, { ...entry.attrs });
-    const record: TrackRecord = { meta, kf: keyframesFromSerialized(keyframes), frameAttrs };
+    const record: TrackRecord = { meta: structuredClone(meta), kf: keyframesFromSerialized(keyframes), frameAttrs };
     this.trackMap.set(meta.id, record);
     if (!this.trackOrder.includes(meta.id)) this.trackOrder.push(meta.id);
     this.touch(null);
@@ -197,6 +294,7 @@ export class TrackStore {
   }
 
   deleteTrack(id: TrackId): TrackRecord | undefined {
+    this.captureTrack(id);
     const record = this.trackMap.get(id);
     if (!record) return undefined;
     this.trackMap.delete(id);
@@ -206,9 +304,14 @@ export class TrackStore {
   }
 
   setTrackMeta(id: TrackId, patch: Partial<Omit<TrackMeta, 'id'>>): void {
+    this.captureTrack(id);
     const record = this.trackMap.get(id);
     if (!record) return;
-    Object.assign(record.meta, patch);
+    validateMeta({ ...record.meta, ...patch });
+    if (Array.from(record.kf.frames).some((f) => f < (patch.startFrame ?? record.meta.startFrame) || f > (patch.endFrame ?? record.meta.endFrame))) {
+      throw new Error('Existence interval cannot exclude keyframes');
+    }
+    Object.assign(record.meta, structuredClone(patch));
     this.touch(new Set([id]));
   }
 
@@ -218,11 +321,18 @@ export class TrackStore {
   }
 
   setKeyframe(id: TrackId, frame: number, state: KeyframeState): void {
+    this.captureTrack(id);
     const record = this.trackMap.get(id);
     if (!record) return;
+    validateState(state);
+    if (!Number.isSafeInteger(frame) || frame < 0) throw new Error('Invalid keyframe index');
     const existing = record.kf.frames.indexOf(frame);
     if (existing >= 0) {
-      record.kf = insertIntoColumns(removeFromColumns(record.kf, existing), frame, state);
+      const kf = record.kf;
+      const pos = kf.pos.slice(), yaw = kf.yaw.slice(), size = kf.size.slice();
+      pos.set([state.pos.x, state.pos.y, state.pos.z], existing * 3);
+      yaw[existing] = state.yaw; size.set([state.size.x, state.size.y, state.size.z], existing * 3);
+      record.kf = { frames: kf.frames, pos, yaw, size };
     } else {
       record.kf = insertIntoColumns(record.kf, frame, state);
     }
@@ -233,10 +343,12 @@ export class TrackStore {
   }
 
   removeKeyframe(id: TrackId, frame: number): KeyframeState | null {
+    this.captureTrack(id);
     const record = this.trackMap.get(id);
     if (!record) return null;
     const idx = record.kf.frames.indexOf(frame);
     if (idx < 0) return null;
+    if (record.kf.frames.length === 1) throw new Error('Cannot remove the last keyframe; delete the track instead');
     const removed = stateAt(record.kf, idx);
     record.kf = removeFromColumns(record.kf, idx);
     this.touch(new Set([id]));
@@ -335,6 +447,9 @@ export class TrackStore {
   ): void {
     const record = this.trackMap.get(id);
     if (!record) return;
+    this.captureTrack(id);
+    if (!Number.isSafeInteger(frame) || frame < record.meta.startFrame || frame > record.meta.endFrame) throw new Error('Invalid attribute frame');
+    if (value !== null) validateAttributes({ [key]: value });
     let attrs = record.frameAttrs.get(frame);
     if (value === null) {
       if (attrs) {
@@ -375,6 +490,7 @@ export class TrackStore {
   }
 
   restoreTrack(serialized: SerializedTrack): void {
+    validateTrack(serialized);
     this.addTrack(
       { ...serialized.meta, attributes: { ...serialized.meta.attributes } },
       serialized.keyframes,
@@ -385,12 +501,14 @@ export class TrackStore {
   // ---- static geometry ----
 
   addGeometry(meta: GeometryMeta, vertices: number[] | Float32Array): GeometryRecord {
+    this.captureGeometry(meta.id);
+    validateGeometry({ meta, vertices: Array.from(vertices) });
     const record: GeometryRecord = {
-      meta,
+      meta: structuredClone(meta),
       vertices: vertices instanceof Float32Array ? vertices : Float32Array.from(vertices),
     };
     this.geometryMap.set(meta.id, record);
-    this.geometryOrder.push(meta.id);
+    if (!this.geometryOrder.includes(meta.id)) this.geometryOrder.push(meta.id);
     this.touch(undefined, null);
     return record;
   }
@@ -416,21 +534,26 @@ export class TrackStore {
   }
 
   setGeometryVertices(id: GeometryId, vertices: number[] | Float32Array): void {
+    this.captureGeometry(id);
     const record = this.geometryMap.get(id);
     if (!record) return;
+    validateGeometry({ meta: record.meta, vertices: Array.from(vertices) });
     record.vertices =
       vertices instanceof Float32Array ? vertices : Float32Array.from(vertices);
     this.touch(undefined, new Set([id]));
   }
 
   setGeometryMeta(id: GeometryId, patch: Partial<Omit<GeometryMeta, 'id'>>): void {
+    this.captureGeometry(id);
     const record = this.geometryMap.get(id);
     if (!record) return;
-    Object.assign(record.meta, patch);
+    validateGeometry({ meta: { ...record.meta, ...patch }, vertices: Array.from(record.vertices) });
+    Object.assign(record.meta, structuredClone(patch));
     this.touch(undefined, new Set([id]));
   }
 
   deleteGeometry(id: GeometryId): GeometryRecord | undefined {
+    this.captureGeometry(id);
     const record = this.geometryMap.get(id);
     if (!record) return undefined;
     this.geometryMap.delete(id);

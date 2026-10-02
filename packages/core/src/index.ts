@@ -37,7 +37,7 @@ export type { StateJSON, TransformDelta } from './command/commands';
 
 // io
 export {
-  parseEgoPoses, manifestLabels, substituteFrame,
+  parseEgoPoses, manifestLabels, substituteFrame, validateManifest,
 } from './io/manifest';
 export type {
   SequenceManifest, CameraConfig, CameraModelType, PointCloudSource,
@@ -63,7 +63,7 @@ export type { TileCoord, WorldRect } from './stream/BevPyramid';
 export {
   HeightField, decodePackedHeights, encodeHeightsToRGBA,
 } from './stream/HeightField';
-export type { RgbaImage, ImageFetcher, ImageDecoder } from './stream/HeightField';
+export type { RgbaImage, ImageFetcher, ImageDecoder, HeightSample } from './stream/HeightField';
 export { PotreeOverlay, defaultNetClient, potreeUncompressedDecoder } from './stream/PotreeOverlay';
 export type {
   PotreeNode, PotreeMetadata, PotreeDecodedChunk, PotreeDecoder, PotreeDecodeContext, NetClient,
@@ -118,3 +118,8 @@ export type { WorldCloudIndex } from './render/WorldCloudOverlay';
 
 export { selectPotreeNodes, stablePointOrder } from './stream/PotreeSelection';
 export type { PotreeViewOptions, PotreeSelection } from './stream/PotreeSelection';
+
+export { IndexedDbDocumentStorage } from './persistence/DocumentStorage';
+export type { DocumentStorage, DurableEdit, StoredDocument } from './persistence/DocumentStorage';
+export { PatchCommand } from './command/PatchCommand';
+export type { StorePatch } from './model/TrackStore';

@@ -2,7 +2,7 @@ import { useSession, useSessionTick } from '../session/SessionProvider';
 
 export function PlaybackBar() {
   const session = useSession();
-  useSessionTick(['frameChanged', 'manifestLoaded', 'storeChanged']);
+  useSessionTick(['frameChanged', 'manifestLoaded', 'storeChanged', 'frameStatusChanged', 'playbackChanged', 'saveChanged']);
   const stats = session.bufferStats();
   const ds = session.datasetStats();
 
@@ -32,19 +32,24 @@ export function PlaybackBar() {
       </select>
 
       <span className="tabular-nums">
-        frame <b className="text-white">{session.frame}</b> / {session.frameCount - 1}
+        {session.frameStatus !== 'ready' && `请求 ${session.requestedFrame} · ${session.frameStatus === 'error' ? '加载失败' : '加载中'} · 呈现 `}frame <b className="text-white">{session.frame}</b> / {session.frameCount - 1}
       </span>
       <input
         type="range"
         min={0}
         max={session.frameCount - 1}
-        value={session.frame}
+        value={session.requestedFrame}
         className="flex-1 accent-[#2b6cff]"
         onChange={(e) => session.setFrame(Number(e.target.value))}
       />
+      {session.frameStatus === 'error' && <button className="btn" onClick={() => session.retryFrame()}>重试帧</button>}
       <span className="text-[10px] text-emerald-400" title="标注进度：有标注的帧占比 / 关键帧总数 / 轨迹数">
         覆盖 {(ds.coverage * 100).toFixed(0)}% · {ds.keyframes} 关键帧 · {ds.trackCount} 轨迹
       </span>
+      <span className="text-[10px]" role="status" aria-label="本地保存状态">
+        {session.saveStatus === 'saved' ? `已保存 r${session.savedRevision}` : session.saveStatus === 'saving' ? '保存中…' : session.saveStatus === 'loading' ? '恢复中…' : session.saveStatus === 'error' ? '保存失败' : '未启用本地保存'}
+      </span>
+      {session.saveStatus === 'error' && <button className="btn" onClick={() => session.history.retryFailed()}>重试保存</button>}
       <span className="text-[10px] text-slate-500" title="点云帧缓冲 / 调度器状态">
         pcd {stats.pcd ? `${stats.pcd.cached}f` : '—'} · queue {stats.scheduler.queued + stats.scheduler.running} · evict {stats.scheduler.evictions}
       </span>

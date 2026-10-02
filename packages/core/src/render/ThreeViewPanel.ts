@@ -1,3 +1,5 @@
+import { previewPose } from '../geometry/math';
+import type { InstancePreview } from './TrackInstanceRenderer';
 import * as THREE from 'three';
 import { boxCorners } from '../geometry/math';
 import type { Vec3 } from '../geometry/math';
@@ -109,13 +111,14 @@ export class ThreeViewPanel {
     this.group.add(this.points);
   }
 
-  syncFrame(frame: number, store: TrackStore, selection: SelectionSet): void {
+  syncFrame(frame: number, store: TrackStore, selection: SelectionSet, preview: InstancePreview | null = null): void {
     let v = 0;
     this.rects = [];
     const color = new THREE.Color();
     for (const id of store.activeTrackIds(frame)) {
-      const state = store.resolveState(id, frame);
-      if (!state) continue;
+      const resolved = store.resolveState(id, frame);
+      if (!resolved) continue;
+      const state = { ...resolved, ...previewPose(id, resolved.pos, resolved.yaw, preview) };
       boxCorners(state.pos, state.yaw, state.size, this.corners);
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       let depth = Infinity;

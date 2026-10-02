@@ -91,7 +91,7 @@ export function createCloudShaderMaterial(options: CloudShaderOptions = {}): THR
   // 缺少 intensity 属性时给默认值，避免 WebGL 缺属性报错
   (material.defaultAttributeValues as Record<string, unknown>).intensity = [0];
   (material.defaultAttributeValues as Record<string, unknown>).pointColor = [1, 1, 1];
-  material.onBeforeRender = (renderer) => {
+  (material as THREE.ShaderMaterial & { onBeforeRender: (renderer: THREE.WebGLRenderer) => void }).onBeforeRender = (renderer) => {
     material.uniforms.uPixelRatio.value = renderer.getPixelRatio();
   };
   return material;

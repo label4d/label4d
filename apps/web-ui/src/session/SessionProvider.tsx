@@ -1,48 +1,58 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { EditorSession } from '@labelfaster/core';
+import { EditorSession, IndexedDbDocumentStorage } from '@labelfaster/core';
 import type { SessionEvents, SnapshotDocument } from '@labelfaster/core';
+import { installTestProbe } from './testProbe';
 import { buildDemoManifest, demoFetchImage, demoNet, demoSeedSnapshot } from '../lib/demo';
 
 const SessionContext = createContext<EditorSession | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const ref = useRef<EditorSession | null>(null);
-  if (!ref.current) {
-    const session = new EditorSession({ net: demoNet, fetchImage: demoFetchImage });
-    ref.current = session;
-    if (typeof window !== 'undefined') {
-      (window as unknown as { __lf: EditorSession }).__lf = session;
-    }
+  const [session, setSession] = useState<EditorSession | null>(null);
+  useEffect(() => {
+    const next = new EditorSession({ net: demoNet, fetchImage: demoFetchImage });
+    let active = true;
+    const removeProbe = installTestProbe(next);
+    const onPageHide = () => { active = false; next.dispose(); };
+    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) window.location.reload(); };
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
+    setSession(next);
+    if (import.meta.env.DEV) (window as unknown as { __lf?: EditorSession }).__lf = next;
     const manifestUrl = new URLSearchParams(window.location.search).get('manifest');
-    if (manifestUrl) {
-      // real-data mode: /?manifest=/kitti/manifest.json (+ optional sibling snapshot.json)
-      void (async () => {
-        try {
+    void (async () => {
+      try {
+        if (manifestUrl) {
           const response = await fetch(manifestUrl);
+          if (!response.ok) throw new Error(`Manifest HTTP ${response.status}`);
           const manifest = await response.json();
-          await session.loadManifest(manifest);
-        } catch (error) {
-          console.error('[labelfaster] manifest load failed', error);
+          if (!active) return;
+          await next.loadManifest(manifest);
+          if (!active) return;
+          const snapshotUrl = new URL('snapshot.json', new URL(manifestUrl, window.location.href)).href;
+          const snapshot = await fetch(snapshotUrl);
+          if (snapshot.ok && active) next.importSnapshot(await snapshot.json());
+        } else {
+          await next.loadManifest(buildDemoManifest());
+          if (!active) return;
+          next.heightPolicy = 'zero-plane'; // demo explicitly declares a flat ground plane
+          next.importSnapshot(demoSeedSnapshot('demo_sequence') as unknown as SnapshotDocument);
+          next.selection.select(['trk_000001']);
         }
-        try {
-          const snapshotUrl = manifestUrl.replace(/manifest\.json.*$/, 'snapshot.json');
-          const snapshotResponse = await fetch(snapshotUrl);
-          if (snapshotResponse.ok) {
-            session.importSnapshot(await snapshotResponse.json());
-          }
-        } catch (error) {
-          console.error('[labelfaster] snapshot import failed', error);
-        }
-      })();
-    } else {
-      void session.loadManifest(buildDemoManifest()).then(() => {
-        session.importSnapshot(demoSeedSnapshot('demo_sequence') as unknown as SnapshotDocument);
-        session.selection.select(['trk_000001']);
-      });
-    }
-  }
-  return <SessionContext.Provider value={ref.current}>{children}</SessionContext.Provider>;
+        if (active) await next.enablePersistence(new IndexedDbDocumentStorage());
+      } catch (error) {
+        if (active) next.events.emit('error', { message: String(error) });
+      }
+    })();
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
+      active = false; removeProbe(); next.dispose();
+      const debug = window as unknown as { __lf?: EditorSession };
+      if (debug.__lf === next) delete debug.__lf;
+    };
+  }, []);
+  return session ? <SessionContext.Provider value={session}>{children}</SessionContext.Provider> : null;
 }
 
 export function useSession(): EditorSession {

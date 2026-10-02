@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { ThreeViewPanel, vec3 } from '@labelfaster/core';
+import { ThreeViewPanel } from '@labelfaster/core';
 import type { ThreeViewAxis } from '@labelfaster/core';
 import { useSession } from '../session/SessionProvider';
 
@@ -97,8 +97,13 @@ export function ThreeViewStrip() {
     let rafId = 0;
     let lastCloud: unknown = null;
     let lastCloudFrame = -1;
+    let lastFocus = '';
+    let lastOverlayKey = '';
+    const lastDepthKeys = ['', '', ''];
     const renderLoop = () => {
       const frame = session.frame;
+      const preview = session.selectionPreview;
+      const previewKey = JSON.stringify(preview ? { ...preview, ids: [...preview.ids] } : null);
       const cloud = session.currentPointCloud();
       // 选中对象时三视图聚焦该对象；未选中时跟随自车
       const focusId = session.selection.first;
@@ -108,15 +113,21 @@ export function ThreeViewStrip() {
       panels.forEach((panel, index) => {
         const entry = refs.current[index];
         if (!entry) return;
-        panel.fit(center, half);
+        const focusKey = `${frame}:${focusId}:${session.store.currentVersion}`;
+        if (focusKey !== lastFocus) panel.fit(center, half);
         const depthCenter = focusState ? panel.depthOf(center) : 0;
-        if (cloud && (cloud !== lastCloud || frame !== lastCloudFrame || index === 0)) {
+        const depthKey = `${depthCenter}:${depthHalfWindow()}`;
+        if (cloud !== lastCloud || frame !== lastCloudFrame || depthKey !== lastDepthKeys[index]) {
           panel.setCloud(cloud, depthCenter - depthHalfWindow(), depthCenter + depthHalfWindow());
+          lastDepthKeys[index] = depthKey;
         }
-        panel.syncFrame(frame, session.store, session.selection);
+        const overlayKey = `${frame}:${session.store.currentVersion}:${session.selection.currentVersion}:${previewKey}`;
+        if (overlayKey !== lastOverlayKey) panel.syncFrame(frame, session.store, session.selection, preview);
         const panelRenderer = renderers[index];
         if (panelRenderer) panel.render(panelRenderer);
       });
+      lastFocus = `${frame}:${focusId}:${session.store.currentVersion}`;
+      lastOverlayKey = `${frame}:${session.store.currentVersion}:${session.selection.currentVersion}:${previewKey}`;
       lastCloud = cloud;
       lastCloudFrame = frame;
       rafId = requestAnimationFrame(renderLoop);
@@ -131,7 +142,7 @@ export function ThreeViewStrip() {
       cancelAnimationFrame(rafId);
       cleanups.forEach((fn) => fn());
     };
-  }, [session, depthHalf]);
+  }, [session, depthHalf, session.manifest]);
 
   return (
     <div className="flex min-h-0 flex-1 gap-px bg-[#1d2530]">
