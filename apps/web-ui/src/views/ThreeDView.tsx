@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { SlidersHorizontal } from 'lucide-react';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   AttributeBadgeRenderer,
@@ -32,7 +33,7 @@ export function ThreeDView() {
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b0e13);
+    scene.background = new THREE.Color(0x0c141c);
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
     const dir = new THREE.DirectionalLight(0xffffff, 0.9);
     dir.position.set(30, 60, 20);
@@ -430,7 +431,8 @@ export function ThreeDView() {
   return (
     <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">
       <canvas ref={canvasRef} className="block h-full w-full" />
-      <label className="absolute right-2 top-14 flex items-center gap-2 rounded bg-black/50 px-2 py-1 text-[10px] text-slate-200">
+      <details className="cloud-view-settings"><summary><SlidersHorizontal size={13} />点云显示</summary><div className="cloud-settings-content">
+      <label>
         点云密度
         <input
           type="range"
@@ -445,7 +447,7 @@ export function ThreeDView() {
           }}
         />
       </label>
-      <label className="absolute right-2 top-20 flex items-center gap-2 rounded bg-black/50 px-2 py-1 text-[10px] text-slate-200">
+      <label>
         点大小
         <input
           type="range"
@@ -461,7 +463,7 @@ export function ThreeDView() {
         />
         <output className="w-12 text-right tabular-nums">{pointSize.toFixed(2)} px</output>
       </label>
-      <label className="absolute right-2 top-2 flex items-center gap-1 rounded bg-black/50 px-2 py-1 text-[10px] text-slate-200">
+      <label>
         <input
           type="checkbox"
           checked={follow}
@@ -472,7 +474,7 @@ export function ThreeDView() {
         />
         跟随自车
       </label>
-      <label className="absolute right-2 top-8 flex items-center gap-1 rounded bg-black/50 px-2 py-1 text-[10px] text-slate-200">
+      <label>
         <input
           type="checkbox"
           checked={potree}
@@ -483,6 +485,7 @@ export function ThreeDView() {
         />
         静态点云(Potree)
       </label>
+      </div></details>
     </div>
   );
 }

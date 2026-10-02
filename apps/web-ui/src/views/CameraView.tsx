@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { CameraImageView } from '@labelfaster/core';
-import { useSession } from '../session/SessionProvider';
+import { useSession, useSessionTick } from '../session/SessionProvider';
 
 /**
  * Camera image view: 4D objects projected through per-camera calibration
@@ -10,6 +10,10 @@ import { useSession } from '../session/SessionProvider';
  */
 export function CameraView({ index = 0 }: { index?: number }) {
   const session = useSession();
+  useSessionTick(['frameChanged', 'frameStatusChanged', 'manifestLoaded', 'storeChanged']);
+  const viewRef = useRef<CameraImageView | null>(null);
+  const [cloudProjection, setCloudProjection] = useState(true);
+  const projectionRef = useRef(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -23,6 +27,8 @@ export function CameraView({ index = 0 }: { index?: number }) {
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     const view = new CameraImageView(session.labels);
+    viewRef.current = view;
+    view.setOptions({ cloudProjection: projectionRef.current });
     const debug = window as unknown as { __lfCam?: unknown; __lfCamTicks?: unknown };
     if (import.meta.env.DEV) debug.__lfCam = view;
 
@@ -31,6 +37,7 @@ export function CameraView({ index = 0 }: { index?: number }) {
 
     const resize = () => {
       renderer.setSize(wrap.clientWidth, wrap.clientHeight, false);
+      view.setViewportSize(wrap.clientWidth, wrap.clientHeight);
     };
     resize();
     const observer = new ResizeObserver(resize);
@@ -42,6 +49,7 @@ export function CameraView({ index = 0 }: { index?: number }) {
       if (!config) return null;
       // 感知 pan/zoom 的画布->图像像素换算（整幅图铺满画布的比例映射在缩放后是错的）
       const img = view.toImagePixel(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
+      if (img.x < 0 || img.y < 0 || img.x > config.width || img.y > config.height) return null;
       return {
         x: img.x,
         y: img.y,
@@ -90,8 +98,8 @@ export function CameraView({ index = 0 }: { index?: number }) {
       if (!config) return;
       // 严格像素跟随：正交视口宽 config.width/viewScale 图像像素铺满 rect.width 屏幕像素；
       // 画布与图像纵横比不同（拉伸填充），横纵系数分开算
-      const kx = config.width / (rect.width * view.viewScaleValue);
-      const ky = config.height / (rect.height * view.viewScaleValue);
+      const kx = (view.camera.right - view.camera.left) / rect.width;
+      const ky = (view.camera.top - view.camera.bottom) / rect.height;
       view.panByPixels((e.clientX - panLast.x) * kx, -(e.clientY - panLast.y) * ky);
       panLast = { x: e.clientX, y: e.clientY };
     };
@@ -107,6 +115,7 @@ export function CameraView({ index = 0 }: { index?: number }) {
       const config = (view.camera.userData as { config?: { width: number; height: number } }).config;
       if (!config) return;
       const img = view.toImagePixel(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
+      if (img.x < 0 || img.y < 0 || img.x > config.width || img.y > config.height) return null;
       const imgYGl = config.height - img.y;
       view.zoomAtCursor(img.x, imgYGl, Math.exp(-e.deltaY * 0.0015));
     };
@@ -114,8 +123,7 @@ export function CameraView({ index = 0 }: { index?: number }) {
 
     const onBadgeToggle = (e: Event) => view.setOptions({ showAll: Boolean((e as CustomEvent).detail) });
     window.addEventListener('lf:badges', onBadgeToggle);
-    const onCloudProj = (e: Event) => view.setOptions({ cloudProjection: Boolean((e as CustomEvent).detail) });
-    window.addEventListener('lf:cloudproj', onCloudProj);
+
 
     let rafId = 0;
     const ticks = { n: 0, wanted: null as string | null };
@@ -170,7 +178,7 @@ export function CameraView({ index = 0 }: { index?: number }) {
       canvas.removeEventListener('pointercancel', cancelPointer);
       canvas.removeEventListener('wheel', onWheel);
       window.removeEventListener('lf:badges', onBadgeToggle);
-      window.removeEventListener('lf:cloudproj', onCloudProj);
+      if (viewRef.current === view) viewRef.current = null;
       if (debug.__lfCam === view) delete debug.__lfCam;
       if (debug.__lfCamTicks === ticks) delete debug.__lfCamTicks;
       view.dispose();
@@ -183,35 +191,15 @@ export function CameraView({ index = 0 }: { index?: number }) {
   const editorLabel = editorTrack ? session.labels.find((l) => l.name === editorTrack.meta.label) : undefined;
 
   return (
-    <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden bg-black">
+    <div ref={wrapRef} className="camera-view">
       <canvas ref={canvasRef} className="block h-full w-full" />
-      <div className="absolute left-2 top-2 flex gap-1">
-        {cameras.map((id) => {
-          const config = session.projectors.get(id)?.config;
-          return (
-            <button
-              key={id}
-              className={`rounded px-2 py-0.5 text-[10px] ${
-                (cameraId ?? session.activeCameraId) === id ? 'bg-[#2b6cff] text-white' : 'bg-black/60 text-slate-300'
-              }`}
-              onClick={() => setCameraId(id)}
-            >
-              {id}·{config?.model === 'pinhole' ? '针孔' : config?.model === 'fisheye_equidistant' ? '鱼眼等距' : config?.model}
-            </button>
-          );
-        })}
+      <div className="camera-chrome">
+        <select aria-label={`选择相机 ${index + 1}`} value={cameraId && cameras.includes(cameraId) ? cameraId : cameras[Math.min(index, cameras.length - 1)] ?? ''} onChange={(e) => setCameraId(e.target.value)}>
+          {cameras.map((id) => <option key={id} value={id}>{id} · {session.projectors.get(id)?.config.model === 'pinhole' ? '针孔' : '鱼眼'}</option>)}
+        </select>
+        <label className="camera-cloud-toggle"><input type="checkbox" checked={cloudProjection} onChange={(e) => { setCloudProjection(e.target.checked); projectionRef.current = e.target.checked; viewRef.current?.setOptions({ cloudProjection: e.target.checked }); }} />点云投影</label>
       </div>
-      <div className="absolute right-2 top-2 flex items-center gap-2">
-        <label className="flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[10px] text-slate-300">
-          <input
-            type="checkbox"
-            defaultChecked
-            onChange={(e) => window.dispatchEvent(new CustomEvent('lf:cloudproj', { detail: e.target.checked }))}
-          />
-          点云投影
-        </label>
-        <span className="rounded bg-black/60 px-2 py-0.5 text-[10px] text-slate-400">双击投影 → 编辑属性</span>
-      </div>
+      {session.frameStatus === 'ready' && !session.currentCameraImage(cameraId ?? cameras[Math.min(index, cameras.length - 1)]) && <div className="camera-empty">当前帧无相机图像</div>}
 
       {editor && editorTrack && (
         <div

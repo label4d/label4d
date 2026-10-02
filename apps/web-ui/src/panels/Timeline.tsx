@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useSession, useSessionTick } from '../session/SessionProvider';
 import { colorForLabel } from '@labelfaster/core';
 
-const ROW_HEIGHT = 16;
-const LABEL_WIDTH = 90;
+const ROW_HEIGHT = 22;
+const LABEL_WIDTH = 132;
 
 /**
  * Canvas timeline: frame ruler, per-track existence bars with keyframe
@@ -15,6 +15,8 @@ export function Timeline() {
   useSessionTick(['frameChanged', 'storeChanged', 'selectionChanged']);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollRef = useRef(0);
+  const drawRef = useRef<() => void>(() => {});
+  const scrubbing = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -34,7 +36,7 @@ export function Timeline() {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = '#0e1218';
+      ctx.fillStyle = '#131d27';
       ctx.fillRect(0, 0, width, height);
 
       const frameCount = session.frameCount;
@@ -44,10 +46,10 @@ export function Timeline() {
       const fx = (f: number) => x0 + (f / Math.max(1, frameCount - 1)) * plot;
 
       // ruler
-      ctx.fillStyle = '#151b24';
+      ctx.fillStyle = '#1b2733';
       ctx.fillRect(0, 0, width, 20);
-      ctx.fillStyle = '#5b6b7f';
-      ctx.font = '10px system-ui';
+      ctx.fillStyle = '#9aafc1';
+      ctx.font = '11px "Avenir Next", system-ui';
       const stepFrames = Math.max(1, Math.round(frameCount / Math.max(4, plot / 60)));
       for (let f = 0; f < frameCount; f += stepFrames) {
         const x = fx(f);
@@ -69,11 +71,11 @@ export function Timeline() {
         if (!record) break;
         const y = rowsTop + i * ROW_HEIGHT - (scrollRef.current % ROW_HEIGHT);
         const selected = session.selection.has(record.meta.id);
-        ctx.fillStyle = selected ? '#20293a' : '#12171f';
+        ctx.fillStyle = selected ? '#2d2c43' : '#17212c';
         ctx.fillRect(0, y, width, ROW_HEIGHT - 1);
         // label
-        ctx.fillStyle = selected ? '#e8eef7' : '#8496ab';
-        ctx.font = '10px system-ui';
+        ctx.fillStyle = selected ? '#e8eef7' : '#b3c2d0';
+        ctx.font = '11px "Avenir Next", system-ui';
         ctx.fillText(`${record.meta.label}·${record.meta.id.slice(-4)}`, 6, y + 11);
         // existence bar
         const color = colorForLabel(session.labels, record.meta.label);
@@ -86,7 +88,7 @@ export function Timeline() {
         // keyframe diamonds
         const kf = session.store.getKeyframes(record.meta.id);
         if (kf) {
-          ctx.fillStyle = '#ffffff';
+          ctx.fillStyle = '#d1c4ff';
           for (let k = 0; k < kf.frames.length; k++) {
             const x = fx(kf.frames[k]);
             ctx.beginPath();
@@ -99,7 +101,7 @@ export function Timeline() {
           }
         }
         if (selected) {
-          ctx.strokeStyle = '#ffe94f';
+          ctx.strokeStyle = '#bcacfa';
           ctx.strokeRect(0.5, y + 0.5, width - 1, ROW_HEIGHT - 2);
         }
       }
@@ -107,7 +109,7 @@ export function Timeline() {
 
       // playhead
       const px = fx(frame);
-      ctx.fillStyle = '#ff5566';
+      ctx.fillStyle = '#70dae0';
       ctx.fillRect(px, 0, 1.5, height);
       ctx.beginPath();
       ctx.moveTo(px - 5, 0);
@@ -117,6 +119,7 @@ export function Timeline() {
       ctx.fill();
     };
 
+    drawRef.current = draw;
     draw();
     const off = session.events.on('frameChanged', draw);
     const off2 = session.events.on('storeChanged', draw);
@@ -127,7 +130,7 @@ export function Timeline() {
       off();
       off2();
       off3();
-      observer.disconnect();
+      observer.disconnect(); drawRef.current = () => {};
     };
   }, [session]);
 
@@ -141,16 +144,28 @@ export function Timeline() {
   return (
     <canvas
       ref={canvasRef}
+      aria-label="轨迹区间与关键帧时间轴"
       className="block h-full w-full cursor-crosshair select-none"
       onWheel={(e) => {
-        scrollRef.current = Math.max(0, scrollRef.current + e.deltaY);
+        const visible = e.currentTarget.clientHeight - 36;
+        scrollRef.current = Math.max(0, Math.min(Math.max(0, session.store.trackCount * ROW_HEIGHT - visible), scrollRef.current + e.deltaY));
+        drawRef.current();
       }}
       onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
+        const rect = e.currentTarget.getBoundingClientRect();
+        if (e.clientX - rect.left < LABEL_WIDTH) {
+          const row = Math.floor((e.clientY - rect.top - 22 + scrollRef.current) / ROW_HEIGHT);
+          const record = e.clientY - rect.top >= 22 ? session.store.listTracks()[row] : undefined;
+          if (record) session.selection.select([record.meta.id], e.shiftKey ? 'toggle' : 'replace');
+          return;
+        }
+        scrubbing.current = true; e.currentTarget.setPointerCapture(e.pointerId);
         session.setFrame(frameFromEvent(e));
       }}
+      onPointerUp={() => { scrubbing.current = false; }}
+      onPointerCancel={() => { scrubbing.current = false; }}
       onPointerMove={(e) => {
-        if (e.buttons & 1) session.setFrame(frameFromEvent(e));
+        if (scrubbing.current && e.buttons & 1) session.setFrame(frameFromEvent(e));
       }}
     />
   );

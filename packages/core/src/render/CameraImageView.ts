@@ -132,7 +132,7 @@ export class CameraImageView {
   labelScale = 0.5; // screen px per label-texture px
 
   constructor(private readonly labelDefs: LabelDef[]) {
-    this.scene.background = new THREE.Color(0x223344);
+    this.scene.background = new THREE.Color(0x080f16);
     this.hullBuf = new Float32Array(65536 * 3);
     this.hullColors = new Float32Array(65536 * 3);
     this.wireBuf = new Float32Array(131072 * 3);
@@ -220,12 +220,21 @@ export class CameraImageView {
   private viewCx = 0;
   private viewCy = 0;
   private viewScale = 1;
+  private viewportAspect: number | null = null;
+  private viewportSize = new THREE.Vector2();
+
+  /** Fit without stretching; projection and picking share the same viewport. */
+  setViewportSize(width: number, height: number): void {
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+    this.viewportAspect = width / height; this.applyCamera();
+  }
 
   private applyCamera(): void {
     const config = this.projector?.config;
     if (!config) return;
-    const halfW = config.width / 2 / this.viewScale;
-    const halfH = config.height / 2 / this.viewScale;
+    const aspect = this.viewportAspect ?? config.width / config.height;
+    const halfW = Math.max(config.width, config.height * aspect) / 2 / this.viewScale;
+    const halfH = halfW / aspect;
     this.camera.left = this.viewCx - halfW;
     this.camera.right = this.viewCx + halfW;
     this.camera.top = this.viewCy + halfH;
@@ -451,15 +460,26 @@ export class CameraImageView {
   toImagePixel(canvasX: number, canvasY: number, canvasW: number, canvasH: number): { x: number; y: number } {
     const config = this.projector?.config;
     if (!config) return { x: 0, y: 0 };
-    const halfW = config.width / 2 / this.viewScale;
-    const halfH = config.height / 2 / this.viewScale;
-    const glX = this.viewCx - halfW + (canvasX / Math.max(1, canvasW)) * 2 * halfW;
-    const glY = this.viewCy - halfH + (1 - canvasY / Math.max(1, canvasH)) * 2 * halfH;
+    const glX = this.camera.left + (canvasX / Math.max(1, canvasW)) * (this.camera.right - this.camera.left);
+    const glY = this.camera.bottom + (1 - canvasY / Math.max(1, canvasH)) * (this.camera.top - this.camera.bottom);
     return { x: glX, y: config.height - glY };
   }
 
   render(renderer: THREE.WebGLRenderer): void {
-    renderer.render(this.scene, this.camera);
+    // Clip overlays to the sensor image, including after letterboxing, pan or zoom.
+    renderer.setScissorTest(false); renderer.clear();
+    const config = this.projector?.config;
+    if (!config) return;
+    renderer.getSize(this.viewportSize);
+    const sx = this.viewportSize.x / (this.camera.right - this.camera.left);
+    const sy = this.viewportSize.y / (this.camera.top - this.camera.bottom);
+    const left = Math.max(0, -this.camera.left * sx);
+    const bottom = Math.max(0, -this.camera.bottom * sy);
+    const right = Math.min(this.viewportSize.x, (config.width - this.camera.left) * sx);
+    const top = Math.min(this.viewportSize.y, (config.height - this.camera.bottom) * sy);
+    if (right <= left || top <= bottom) return;
+    renderer.setScissor(left, bottom, right - left, top - bottom);
+    renderer.setScissorTest(true); renderer.render(this.scene, this.camera); renderer.setScissorTest(false);
   }
 
   dispose(): void {

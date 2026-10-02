@@ -1,272 +1,94 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, Box, Copy, Diamond, MousePointer2, Plus, Scissors, Trash2 } from 'lucide-react';
 import { useSession, useSessionTick } from '../session/SessionProvider';
 import type { AttributeDef, GeometryKind, KeyframeState } from '@labelfaster/core';
 
-function NumberField(props: { label: string; value: number; step?: number; onCommit: (v: number) => void }) {
-  const [text, setText] = useState<string | null>(null);
-  return (
-    <label className="flex items-center justify-between gap-1 py-0.5">
-      <span className="text-[10px] text-slate-500">{props.label}</span>
-      <input
-        type="number"
-        step={props.step ?? 0.1}
-        className="w-20 rounded bg-[#1d2530] px-1 py-0.5 text-[11px] text-slate-200 outline-none focus:ring-1 focus:ring-[#2b6cff]"
-        value={text ?? props.value.toFixed(2)}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={() => {
-          if (text !== null) {
-            const v = Number(text);
-            if (Number.isFinite(v)) props.onCommit(v);
-            setText(null);
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-        }}
-      />
-    </label>
-  );
+function NumberField({ label, value, step = 0.1, min, unit, onCommit }: {
+  label: string; value: number; step?: number; min?: number; unit?: string; onCommit: (v: number) => void;
+}) {
+  const [text, setText] = useState<string | null>(null); const cancel = useRef(false);
+  return <label className="number-field"><span>{label}</span><div>
+    <input type="number" step={step} min={min} aria-label={label} value={text ?? value.toFixed(2)}
+      onChange={(e) => setText(e.target.value)} onBlur={() => {
+        if (!cancel.current && text !== null && text.trim() !== '') { const v = Number(text); if (Number.isFinite(v) && (min === undefined || v >= min) && v !== value) onCommit(v); }
+        cancel.current = false; setText(null);
+      }} onKeyDown={(e) => { if (e.key === 'Escape') { cancel.current = true; e.currentTarget.blur(); } else if (e.key === 'Enter') e.currentTarget.blur(); }} />
+    {unit && <small>{unit}</small>}
+  </div></label>;
 }
-
-function AttributeRow(props: { def: AttributeDef; value: string | number | boolean | undefined; onChange: (v: string | number | boolean) => void }) {
-  const { def, value, onChange } = props;
-  if (def.type === 'enum') {
-    return (
-      <label className="flex items-center justify-between gap-1 py-0.5">
-        <span className="text-[10px] text-slate-500">{def.key}{def.perFrame ? ' ⏱' : ''}</span>
-        <select
-          className="w-24 rounded bg-[#1d2530] px-1 py-0.5 text-[11px] text-slate-200 outline-none"
-          value={String(value ?? def.default ?? def.options?.[0] ?? '')}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          {def.options?.map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-      </label>
-    );
-  }
-  if (def.type === 'bool') {
-    return (
-      <label className="flex items-center justify-between gap-1 py-0.5">
-        <span className="text-[10px] text-slate-500">{def.key}{def.perFrame ? ' ⏱' : ''}</span>
-        <input
-          type="checkbox"
-          checked={Boolean(value ?? def.default ?? false)}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-      </label>
-    );
-  }
-  return (
-    <label className="flex items-center justify-between gap-1 py-0.5">
-      <span className="text-[10px] text-slate-500">{def.key}{def.perFrame ? ' ⏱' : ''}</span>
-      <input
-        type={def.type === 'number' ? 'number' : 'text'}
-        className="w-24 rounded bg-[#1d2530] px-1 py-0.5 text-[11px] text-slate-200 outline-none"
-        value={String(value ?? def.default ?? '')}
-        onChange={(e) => onChange(def.type === 'number' ? Number(e.target.value) : e.target.value)}
-      />
-    </label>
-  );
+function AttributeRow({ def, value, onChange }: { def: AttributeDef; value: string | number | boolean | undefined; onChange: (v: string | number | boolean) => void }) {
+  const [text, setText] = useState<string | null>(null); const cancel = useRef(false);
+  if (def.type === 'number') return <NumberField label={def.key} value={Number(value ?? def.default ?? 0)} onCommit={onChange} />;
+  return <label className="attribute-row"><span>{def.key}{def.perFrame && <small>当前帧</small>}</span>
+    {def.type === 'enum' ? <select value={String(value ?? def.default ?? def.options?.[0] ?? '')} onChange={(e) => onChange(e.target.value)}>{def.options?.map((option) => <option key={option}>{option}</option>)}</select>
+      : def.type === 'bool' ? <input type="checkbox" checked={Boolean(value ?? def.default ?? false)} onChange={(e) => onChange(e.target.checked)} />
+      : <input type="text" value={text ?? String(value ?? def.default ?? '')} onChange={(e) => setText(e.target.value)} onBlur={() => { if (!cancel.current && text !== null && text !== String(value ?? def.default ?? '')) onChange(text); cancel.current = false; setText(null); }} onKeyDown={(e) => { if (e.key === 'Escape') { cancel.current = true; e.currentTarget.blur(); } else if (e.key === 'Enter') e.currentTarget.blur(); }} />}
+  </label>;
 }
 
 export function PropertiesPanel() {
   const session = useSession();
-  useSessionTick(['storeChanged', 'selectionChanged', 'frameChanged', 'saveChanged']);
+  useSessionTick(['storeChanged', 'selectionChanged', 'frameChanged', 'saveChanged', 'frameStatusChanged']);
   const [copyFrame, setCopyFrame] = useState('');
-
-  const selected = session.selection.all();
-  const first = selected[0] ?? null;
+  const selected = session.selection.all(); const first = selected[0];
   const track = first ? session.store.getTrack(first) : undefined;
   const geometry = first && !track ? session.store.getGeometry(first) : undefined;
   const frame = session.frame;
-
-  if (!first) {
-    return (
-      <div className="flex-1 px-3 py-2 text-[11px] text-slate-600">
-        未选中对象。视图内点击选择；工具栏切换绘制工具。
-      </div>
-    );
-  }
-
+  const safe = (fn: () => void) => { try { fn(); } catch (error) { session.events.emit('error', { message: String(error) }); } };
+  if (!first) return <div className="inspector-empty"><MousePointer2 size={28} strokeWidth={1.3} /><h3>选择一个对象</h3><p>点击视图或对象列表，查看位姿、关键帧与属性。</p><span>Shift 点击可多选</span></div>;
+  if (selected.length > 1) return <fieldset className="properties-panel" disabled={!session.canEdit}>
+    <div className="property-identity"><Box size={18} /><h2>已选择 {selected.length} 个对象</h2></div>
+    <p className="property-note">批量操作支持复制和删除；相邻、同类别且元数据兼容的轨迹可合并。</p>
+    <div className="property-actions"><button className="btn" onClick={() => safe(() => session.duplicateSelection())}><Copy size={14} />复制轨迹</button><button className="btn" disabled={!selected.every((id) => session.store.getTrack(id))} onClick={() => safe(() => session.mergeSelectedTracks())}>合并轨迹</button><button className="btn btn-danger" onClick={() => safe(() => session.deleteSelection())}><Trash2 size={14} />删除选中对象</button></div>
+  </fieldset>;
   if (track) {
-    const state = session.store.resolveState(track.meta.id, frame);
+    const state = session.store.resolveState(track.meta.id, frame); const kf = track.kf;
+    const before = [...kf.frames].filter((f) => f < frame); const previous = before[before.length - 1]; const next = [...kf.frames].find((f) => f > frame);
     const labelDef = session.labels.find((l) => l.name === track.meta.label);
     const frameAttrs = session.store.getFrameAttributes(track.meta.id, frame) ?? {};
-    const kf = session.store.getKeyframes(track.meta.id);
-  // speed derived from neighbouring keyframes
-  const speedInfo = (() => {
-    if (!track) return null;
-    const kf = session.store.getKeyframes(track.meta.id);
-    if (!kf || kf.frames.length === 0) return null;
-    const fps = session.playhead.fps || 10;
-    let pa = -1, pb = -1;
-    let lo = 0;
-    const k = kf.frames.length;
-    while (lo < k && kf.frames[lo] <= frame) lo++;
-    pb = Math.min(k - 1, lo);
-    pa = Math.max(0, lo - 1);
-    if (pa === pb) return null;
-    const dt = (kf.frames[pb] - kf.frames[pa]) / fps;
-    if (dt <= 0) return null;
-    const dx = kf.pos[pb * 3] - kf.pos[pa * 3];
-    const dz = kf.pos[pb * 3 + 2] - kf.pos[pa * 3 + 2];
-    const dy = kf.pos[pb * 3 + 1] - kf.pos[pa * 3 + 1];
-    const speed = Math.hypot(dx, dy, dz) / dt;
-    const dirDeg = (Math.atan2(-dz, dx) * 180) / Math.PI;
-    return { speed, dirDeg };
-  })();
-
-  return (
-    <fieldset disabled={!session.canEdit} className="flex-1 overflow-y-auto px-3 py-2 text-[11px] text-slate-300">
-      <div className="mb-1 flex items-center gap-2">
-        <b className="text-white">{track.meta.label}·{track.meta.id.slice(-4)}</b>
-          {track.meta.source === 'model' && (
-            <span className="rounded bg-amber-500/20 px-1 text-[9px] text-amber-400">
-              AI {track.meta.confidence?.toFixed(2)}
-            </span>
-          )}
-          {state?.atKeyframe && <span className="rounded bg-sky-500/20 px-1 text-[9px] text-sky-300">关键帧</span>}
+    const copyTarget = Number(copyFrame); const copyValid = copyFrame.trim() !== '' && Number.isSafeInteger(copyTarget) && copyTarget >= 0 && copyTarget < session.frameCount;
+    const commit = (patch: Partial<KeyframeState>) => { if (state) safe(() => session.editKeyframe(track.meta.id, frame, { pos: state.pos, size: state.size, yaw: state.yaw, ...patch })); };
+    return <fieldset disabled={!session.canEdit} className="properties-panel" key={track.meta.id}>
+      <div className="property-identity"><Box size={18} /><h2>{track.meta.label}<span>#{track.meta.id.slice(-4)}</span></h2><span className={`state-chip ${state?.atKeyframe ? 'keyframe' : ''}`}>{state?.atKeyframe ? '关键帧' : '插值帧'}</span></div>
+      {track.meta.source === 'model' && <p className="property-note">模型候选 · 置信度 {track.meta.confidence?.toFixed(2) ?? '未提供'}</p>}
+      <label className="attribute-row"><span>对象类别</span><select aria-label="类别" value={track.meta.label} onChange={(e) => safe(() => session.setTrackMeta(track.meta.id, { label: e.target.value }))}>{session.labels.filter((l) => l.dynamic).map((l) => <option key={l.name}>{l.name}</option>)}</select></label>
+      <section key={`${track.meta.id}:${frame}`} className="property-section"><div className="property-section-heading"><h3>当前帧位姿</h3><span className="scope-label">帧 {frame}</span></div>
+        <p className="property-note">修改会在当前帧设置关键帧</p>
+        {state ? <>
+          <div className="field-group"><span className="field-group-label">位置 · m</span><div className="number-grid">
+            <NumberField label="x" value={state.pos.x} onCommit={(v) => commit({ pos: { ...state.pos, x: v } })} />
+            <NumberField label="y" value={state.pos.y} onCommit={(v) => commit({ pos: { ...state.pos, y: v } })} />
+            <NumberField label="z" value={state.pos.z} onCommit={(v) => commit({ pos: { ...state.pos, z: v } })} />
+          </div></div>
+          <div className="field-group"><span className="field-group-label">尺寸 · m</span><div className="number-grid">
+            <NumberField label="长" min={0.01} value={state.size.x} onCommit={(v) => commit({ size: { ...state.size, x: v } })} />
+            <NumberField label="宽" min={0.01} value={state.size.z} onCommit={(v) => commit({ size: { ...state.size, z: v } })} />
+            <NumberField label="高" min={0.01} value={state.size.y} onCommit={(v) => commit({ size: { ...state.size, y: v } })} />
+          </div></div>
+          <div className="yaw-field"><span>朝向</span><NumberField label="yaw°" unit="°" step={1} value={state.yaw * 180 / Math.PI} onCommit={(v) => commit({ yaw: v * Math.PI / 180 })} /></div>
+        </> : <p className="property-note">当前帧不在存在区间内，请跳转到有效关键帧。</p>}
+      </section>
+      <section className="property-section"><div className="property-section-heading"><h3>关键帧</h3><span className="muted">{kf.frames.length} 个</span></div>
+        <div className="keyframe-actions"><button className="icon-button" aria-label="上一个关键帧" disabled={previous === undefined} title={`上一个关键帧 ${previous ?? ''}`} onClick={() => previous !== undefined && session.setFrame(previous)}><ArrowLeft size={16} /></button>
+          <button className="btn keyframe-button" disabled={!state || state.atKeyframe} onClick={() => safe(() => session.setKeyframeAtCurrentFrame(track.meta.id))}><Plus size={14} />设关键帧 <kbd>K</kbd></button>
+          <button className="icon-button" aria-label="下一个关键帧" disabled={next === undefined} title={`下一个关键帧 ${next ?? ''}`} onClick={() => next !== undefined && session.setFrame(next)}><ArrowRight size={16} /></button>
+          <button className="icon-button danger-text" aria-label="删除当前关键帧" title="删除当前关键帧" disabled={!state?.atKeyframe || kf.frames.length <= 1} onClick={() => safe(() => session.removeKeyframeAtCurrentFrame(track.meta.id))}><Trash2 size={15} /></button>
         </div>
-
-        <label className="flex items-center justify-between py-0.5">
-          <span className="text-[10px] text-slate-500">类别</span>
-          <select
-            className="w-24 rounded bg-[#1d2530] px-1 py-0.5 text-[11px] outline-none"
-            value={track.meta.label}
-            onChange={(e) => session.setTrackMeta(track.meta.id, { label: e.target.value })}
-          >
-            {session.labels.filter((l) => l.dynamic).map((l) => (
-              <option key={l.name} value={l.name}>{l.name}</option>
-            ))}
-          </select>
-        </label>
-
-        <div className="mt-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">位姿 @ frame {frame}</div>
-        {state ? (
-          <>
-            <div className="grid grid-cols-2 gap-x-3">
-              <NumberField label="x" value={state.pos.x} onCommit={(v) => commitState({ x: v, y: state.pos.y, z: state.pos.z })} />
-              <NumberField label="y" value={state.pos.y} onCommit={(v) => commitState({ x: state.pos.x, y: v, z: state.pos.z })} />
-              <NumberField label="z" value={state.pos.z} onCommit={(v) => commitState({ x: state.pos.x, y: state.pos.y, z: v })} />
-              <NumberField
-                label="yaw°"
-                step={1}
-                value={(state.yaw * 180) / Math.PI}
-                onCommit={(v) => commitState(undefined, (v * Math.PI) / 180)}
-              />
-              <NumberField label="长" value={state.size.x} onCommit={(v) => commitSize({ x: v, y: state.size.y, z: state.size.z })} />
-              <NumberField label="高" value={state.size.y} onCommit={(v) => commitSize({ x: state.size.x, y: v, z: state.size.z })} />
-              <NumberField label="宽" value={state.size.z} onCommit={(v) => commitSize({ x: state.size.x, y: state.size.y, z: v })} />
-            </div>
-            {speedInfo && (
-              <div className="mt-1 text-[10px] text-emerald-400" title="由相邻关键帧差分；通过编辑关键帧位置改变速度">
-                速度 {speedInfo.speed.toFixed(2)} m/s（方向 {((speedInfo.dirDeg + 360) % 360).toFixed(0)}°）
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="text-[10px] text-slate-600">当前帧不在轨迹存在区间内</div>
-        )}
-
-        <div className="mt-2 flex flex-wrap gap-1">
-          <button className="btn" onClick={() => session.setKeyframeAtCurrentFrame(track.meta.id)}>设关键帧 (K)</button>
-          <button className="btn" onClick={() => session.removeKeyframeAtCurrentFrame(track.meta.id)}>删关键帧</button>
-          <input
-            className="w-14 rounded bg-[#1d2530] px-1 py-1 text-[10px] outline-none"
-            placeholder="帧"
-            value={copyFrame}
-            onChange={(e) => setCopyFrame(e.target.value)}
-          />
-          <button
-            className="btn"
-            onClick={() => {
-              const target = Number(copyFrame);
-              if (Number.isFinite(target)) session.copyStateToFrame(track.meta.id, target);
-            }}
-          >
-            拷贝状态到帧
-          </button>
-          <button className="btn" onClick={() => session.splitSelectedAtCurrentFrame()}>拆分</button>
-          <button className="btn disabled:opacity-40" disabled={selected.length < 2} onClick={() => session.mergeSelectedTracks()}>合并</button>
-          <button className="btn" onClick={() => session.duplicateSelection()} title="复制选中轨迹并偏移 2m">复制轨迹</button>
-          <button className="rounded bg-[#7a2430] px-2 py-1 text-rose-200 hover:bg-[#952c3c]" onClick={() => session.deleteSelection()}>删除 (Del)</button>
-        </div>
-
-        <div className="mt-1 text-[10px] text-slate-500">
-          关键帧 {kf?.frames.length ?? 0} 个 · 区间 [{track.meta.startFrame}, {track.meta.endFrame}]
-        </div>
-
-        {labelDef?.attributeSchema?.length ? (
-          <>
-            <div className="mt-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">属性</div>
-            {labelDef.attributeSchema.map((def) =>
-              def.perFrame ? (
-                <AttributeRow
-                  key={def.key}
-                  def={def}
-                  value={frameAttrs[def.key]}
-                  onChange={(v) => session.setFrameAttribute(track.meta.id, def.key, v)}
-                />
-              ) : (
-                <AttributeRow
-                  key={def.key}
-                  def={def}
-                  value={track.meta.attributes[def.key]}
-                  onChange={(v) => session.setTrackAttribute(track.meta.id, def.key, v)}
-                />
-              )
-            )}
-          </>
-        ) : null}
-      </fieldset>
-    );
+        <div className="keyframe-chips" aria-label="关键帧跳转">{[...kf.frames].map((f) => <button key={f} className={f === frame ? 'is-current' : ''} aria-label={`跳转到关键帧 ${f}`} aria-current={f === frame ? 'step' : undefined} onClick={() => session.setFrame(f)}><Diamond size={9} fill={f === frame ? 'currentColor' : 'none'} />{f}</button>)}</div>
+        <label className="attribute-row"><span>插值方式</span><select aria-label="插值方式" value={track.meta.interpolation} onChange={(e) => safe(() => session.setTrackMeta(track.meta.id, { interpolation: e.target.value as 'linear' | 'hold' }))}><option value="linear">线性插值</option><option value="hold">保持前帧</option></select></label>
+        <div className="property-range"><span>存在区间</span><span>{track.meta.startFrame} — {track.meta.endFrame}</span></div>
+        <div className="copy-frame-row"><input aria-label="复制状态的目标帧" placeholder="目标帧" type="number" min={0} max={session.frameCount - 1} value={copyFrame} onChange={(e) => setCopyFrame(e.target.value)} /><button className="btn" disabled={!copyValid || !state} onClick={() => safe(() => session.copyStateToFrame(track.meta.id, copyTarget))}><Copy size={13} />拷贝状态到帧</button></div>
+      </section>
+      {labelDef?.attributeSchema?.length ? <section className="property-section"><div className="property-section-heading"><h3>对象属性</h3></div>{labelDef.attributeSchema.map((def) => <AttributeRow key={`${track.meta.id}:${def.key}:${frame}`} def={def} value={def.perFrame ? frameAttrs[def.key] : track.meta.attributes[def.key]} onChange={(v) => safe(() => def.perFrame ? session.setFrameAttribute(track.meta.id, def.key, v) : session.setTrackAttribute(track.meta.id, def.key, v))} />)}</section> : null}
+      <section className="property-section property-actions"><button className="btn" disabled={frame <= track.meta.startFrame || frame > track.meta.endFrame} onClick={() => safe(() => session.splitSelectedAtCurrentFrame())}><Scissors size={14} />拆分</button><button className="btn" onClick={() => safe(() => session.duplicateSelection())}><Copy size={14} />复制轨迹</button><button className="btn btn-danger" onClick={() => safe(() => session.deleteSelection())}><Trash2 size={14} />删除</button></section>
+    </fieldset>;
   }
-
-  if (geometry) {
-    return (
-      <fieldset disabled={!session.canEdit} className="flex-1 overflow-y-auto px-3 py-2 text-[11px] text-slate-300">
-        <div className="mb-1"><b className="text-white">{geometry.meta.kind}·{geometry.meta.id.slice(-4)}</b></div>
-        <div className="text-[10px] text-slate-500">顶点 {geometry.vertices.length / 3} 个 · 闭合 {geometry.meta.closed ? '是' : '否'}</div>
-        <div className="mt-2 flex gap-1">
-          <select
-            className="rounded bg-[#1d2530] px-1 py-0.5 text-[11px] outline-none"
-            value={geometry.meta.kind}
-            onChange={(e) =>
-              session.updateGeometry(geometry.meta.id, {
-                kind: e.target.value as GeometryKind, label: e.target.value,
-              })
-            }
-          >
-            {session.labels.filter((l) => !l.dynamic).map((l) => (
-              <option key={l.name} value={l.name.toLowerCase()}>{l.name}</option>
-            ))}
-          </select>
-          <button className="rounded bg-[#7a2430] px-2 py-1 text-rose-200 hover:bg-[#952c3c]" onClick={() => session.deleteSelection()}>删除</button>
-        </div>
-      </fieldset>
-    );
-  }
-
-  return <div className="flex-1 px-3 py-2 text-[11px] text-slate-600">选中 {selected.length} 个对象</div>;
-
-  function commitState(pos?: { x: number; y: number; z: number }, yaw?: number) {
-    if (!track) return;
-    const current = session.store.resolveState(track.meta.id, frame);
-    if (!current) return;
-    pushKeyframe({ pos: pos ?? current.pos, yaw: yaw ?? current.yaw, size: current.size });
-  }
-
-  function commitSize(size: { x: number; y: number; z: number }) {
-    if (!track) return;
-    const current = session.store.resolveState(track.meta.id, frame);
-    if (!current) return;
-    pushKeyframe({ pos: current.pos, yaw: current.yaw, size });
-  }
-
-  function pushKeyframe(state: KeyframeState) {
-    if (!track) return;
-    session.editKeyframe(track.meta.id, frame, state);
-  }
+  if (geometry) return <fieldset className="properties-panel" disabled={!session.canEdit}>
+    <div className="property-identity"><h2>{geometry.meta.label}<span>#{geometry.meta.id.slice(-4)}</span></h2><span className="state-chip">几何元素</span></div>
+    <section className="property-section"><div className="property-section-heading"><h3>几何信息</h3></div><label className="attribute-row"><span>元素类型</span><select aria-label="几何元素类型" value={geometry.meta.kind} onChange={(e) => safe(() => session.updateGeometry(geometry.meta.id, { kind: e.target.value as GeometryKind, label: e.target.value }))}>{session.labels.filter((l) => !l.dynamic).map((l) => <option key={l.name} value={l.name.toLowerCase()}>{l.name}</option>)}</select></label>
+      <div className="property-range"><span>顶点</span><span>{geometry.vertices.length / 3} 个</span></div><div className="property-range"><span>闭合</span><span>{geometry.meta.closed ? '是' : '否'}</span></div>
+      <p className="property-note">使用左侧顶点工具调整形状。</p><button className="btn" onClick={() => session.setTool('vertexEdit')}>编辑顶点 <kbd>5</kbd></button>
+    </section><section className="property-section"><button className="btn btn-danger" onClick={() => safe(() => session.deleteSelection())}><Trash2 size={14} />删除几何</button></section>
+  </fieldset>;
+  return <div className="inspector-empty">当前对象已不存在，请重新选择。</div>;
 }

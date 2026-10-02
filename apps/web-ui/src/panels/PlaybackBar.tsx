@@ -1,58 +1,29 @@
+import { useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pause, Play, RotateCcw } from 'lucide-react';
 import { useSession, useSessionTick } from '../session/SessionProvider';
 
 export function PlaybackBar() {
   const session = useSession();
-  useSessionTick(['frameChanged', 'manifestLoaded', 'storeChanged', 'frameStatusChanged', 'playbackChanged', 'saveChanged']);
-  const stats = session.bufferStats();
+  useSessionTick(['frameChanged', 'manifestLoaded', 'storeChanged', 'frameStatusChanged', 'playbackChanged']);
+  const cancelled = useRef(false);
+  const [frameText, setFrameText] = useState<string | null>(null); const [, refresh] = useState(0);
   const ds = session.datasetStats();
-
-  return (
-    <div className="flex items-center gap-3 border-t border-[#1d2530] bg-[#0e1218] px-3 py-1.5 text-xs text-slate-300">
-      <button className="btn" onClick={() => session.setFrame(0)} title="第一帧">⏮</button>
-      <button className="btn" onClick={() => session.setFrame(session.frame - 1)} title="上一帧">◀</button>
-      <button
-        className="rounded bg-[#2b6cff] px-3 py-1 font-medium text-white hover:bg-[#3d7bff]"
-        onClick={() => (session.playhead.playing ? session.pause() : session.play())}
-      >
-        {session.playhead.playing ? '⏸ 暂停' : '▶ 播放'}
-      </button>
-      <button className="btn" onClick={() => session.setFrame(session.frame + 1)} title="下一帧">▶|</button>
-      <button className="btn" onClick={() => session.setFrame(session.frameCount - 1)} title="最后一帧">⏭</button>
-
-      <select
-        className="rounded bg-[#1d2530] px-1 py-1 outline-none"
-        value={session.playhead.speed}
-        onChange={(e) => {
-          session.playhead.speed = Number(e.target.value);
-        }}
-      >
-        {[0.25, 0.5, 1, 2, 4].map((s) => (
-          <option key={s} value={s}>{s}x</option>
-        ))}
-      </select>
-
-      <span className="tabular-nums">
-        {session.frameStatus !== 'ready' && `请求 ${session.requestedFrame} · ${session.frameStatus === 'error' ? '加载失败' : '加载中'} · 呈现 `}frame <b className="text-white">{session.frame}</b> / {session.frameCount - 1}
-      </span>
-      <input
-        type="range"
-        min={0}
-        max={session.frameCount - 1}
-        value={session.requestedFrame}
-        className="flex-1 accent-[#2b6cff]"
-        onChange={(e) => session.setFrame(Number(e.target.value))}
-      />
-      {session.frameStatus === 'error' && <button className="btn" onClick={() => session.retryFrame()}>重试帧</button>}
-      <span className="text-[10px] text-emerald-400" title="标注进度：有标注的帧占比 / 关键帧总数 / 轨迹数">
-        覆盖 {(ds.coverage * 100).toFixed(0)}% · {ds.keyframes} 关键帧 · {ds.trackCount} 轨迹
-      </span>
-      <span className="text-[10px]" role="status" aria-label="本地保存状态">
-        {session.saveStatus === 'saved' ? `已保存 r${session.savedRevision}` : session.saveStatus === 'saving' ? '保存中…' : session.saveStatus === 'loading' ? '恢复中…' : session.saveStatus === 'error' ? '保存失败' : '未启用本地保存'}
-      </span>
-      {session.saveStatus === 'error' && <button className="btn" onClick={() => session.history.retryFailed()}>重试保存</button>}
-      <span className="text-[10px] text-slate-500" title="点云帧缓冲 / 调度器状态">
-        pcd {stats.pcd ? `${stats.pcd.cached}f` : '—'} · queue {stats.scheduler.queued + stats.scheduler.running} · evict {stats.scheduler.evictions}
-      </span>
+  const commit = () => { if (!cancelled.current && frameText?.trim()) { const n = Number(frameText); if (Number.isSafeInteger(n)) session.setFrame(Math.max(0, Math.min(session.frameCount - 1, n))); } cancelled.current = false; setFrameText(null); };
+  return <footer className="playback-bar">
+    <div className="transport-controls">
+      <button className="icon-button" aria-label="第一帧" disabled={session.requestedFrame === 0} onClick={() => session.setFrame(0)}><ChevronsLeft size={17} /></button>
+      <button className="icon-button" aria-label="上一帧" title="上一帧 [" disabled={session.requestedFrame === 0} onClick={() => session.setFrame(session.requestedFrame - 1)}><ChevronLeft size={17} /></button>
+      <button className="play-button" aria-label={session.playhead.playing ? '暂停' : '播放'} title="播放 / 暂停 Space" onClick={() => session.playhead.playing ? session.pause() : session.play()}>{session.playhead.playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}<span>{session.playhead.playing ? '暂停' : '播放'}</span></button>
+      <button className="icon-button" aria-label="下一帧" title="下一帧 ]" disabled={session.requestedFrame === session.frameCount - 1} onClick={() => session.setFrame(session.requestedFrame + 1)}><ChevronRight size={17} /></button>
+      <button className="icon-button" aria-label="最后一帧" disabled={session.requestedFrame === session.frameCount - 1} onClick={() => session.setFrame(session.frameCount - 1)}><ChevronsRight size={17} /></button>
+      <select aria-label="播放速度" value={session.playhead.speed} onChange={(e) => { session.playhead.speed = Number(e.target.value); refresh((n) => n + 1); }}>{[0.25, 0.5, 1, 2, 4].map((s) => <option key={s} value={s}>{s}×</option>)}</select>
     </div>
-  );
+    <label className="frame-entry"><span>帧</span><input aria-label="跳转到帧" type="number" min={0} max={session.frameCount - 1} value={frameText ?? session.requestedFrame} onChange={(e) => setFrameText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { cancelled.current = true; setFrameText(null); e.currentTarget.blur(); } }} /><span>/ {session.frameCount - 1}</span></label>
+    <input aria-label="序列帧进度" type="range" min={0} max={session.frameCount - 1} value={session.requestedFrame} className="frame-scrubber" onChange={(e) => session.setFrame(Number(e.target.value))} />
+    <span className={`frame-readiness ${session.frameStatus !== 'ready' ? 'is-loading' : ''}`}>
+      {session.frameStatus === 'ready' ? `${(session.frame / (session.playhead.fps || 10)).toFixed(2)} s` : `呈现 ${session.frame} · ${session.frameStatus === 'error' ? '加载失败' : '加载中'}`}
+    </span>
+    {session.frameStatus === 'error' && <button className="icon-button" aria-label="重试帧" onClick={() => session.retryFrame()}><RotateCcw size={16} /></button>}
+    <div className="coverage-indicator" title={`已有标注的帧占比，不代表已复核；${ds.keyframes} 个关键帧`}><span className="coverage-meter"><i style={{ width: `${ds.coverage * 100}%` }} /></span><span>覆盖 {(ds.coverage * 100).toFixed(0)}%</span><span className="muted">{ds.trackCount} 轨迹</span></div>
+  </footer>;
 }

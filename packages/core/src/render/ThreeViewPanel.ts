@@ -192,43 +192,39 @@ export class ThreeViewPanel {
 
   private viewCenter: Vec3 = { x: 0, y: 0, z: 0 };
   private halfExtent = 45;
+  private aspect = 1;
 
   /** viewport px -> panel plane coords (matches fit(), includes user pan) */
   screenToPlane(px: number, py: number, viewportW: number, viewportH: number): { x: number; y: number } {
     const ndcX = (px / Math.max(1, viewportW)) * 2 - 1;
     const ndcY = -(py / Math.max(1, viewportH)) * 2 + 1;
     const h = this.halfExtent;
+    const w = h * this.aspect;
     const c = this.viewCenter;
-    const panX = this.userPanX * h;
+    const panX = this.userPanX * w;
     const panY = this.userPanY * h;
-    if (this.axis === 'top') return { x: c.x + ndcX * h + panX, y: c.z - ndcY * h + panY };
-    if (this.axis === 'front') return { x: c.x + ndcX * h + panX, y: c.y + ndcY * h + panY };
-    return { x: c.z - ndcX * h + panX, y: c.y + ndcY * h + panY };
+    if (this.axis === 'top') return { x: c.x + ndcX * w + panX, y: c.z - ndcY * h + panY };
+    if (this.axis === 'front') return { x: c.x + ndcX * w + panX, y: c.y + ndcY * h + panY };
+    return { x: c.z - ndcX * w + panX, y: c.y + ndcY * h + panY };
   }
 
-  fit(center: Vec3, halfExtent: number): void {
+  fit(center: Vec3, halfExtent: number, aspect = 1): void {
+    this.aspect = Math.max(0.01, aspect);
     const half = halfExtent / this.userZoom;
-    const panX = this.userPanX * half;
+    const panX = this.userPanX * half * this.aspect;
     const panY = this.userPanY * half;
     this.viewCenter = { ...center };
     this.halfExtent = half;
     // 平移量定义在平面坐标上，基点必须经 toPlane 换算（侧视平面x=世界z，俯视平面y=世界z）
     const [pcx, pcy] = this.toPlane(center);
-    const adjusted = this.planeToWorld(pcx + panX, pcy + panY);
-    if (this.axis === 'top') {
-      this.camera.position.set(adjusted.x, 500, adjusted.z);
-      this.camera.up.set(0, 0, -1);
-      this.camera.lookAt(adjusted.x, 0, adjusted.z);
-    } else if (this.axis === 'front') {
-      this.camera.position.set(adjusted.x, adjusted.y, adjusted.z + 500);
-      this.camera.up.set(0, 1, 0);
-      this.camera.lookAt(adjusted.x, adjusted.y, adjusted.z);
-    } else {
-      this.camera.position.set(adjusted.x + 500, adjusted.y, adjusted.z);
-      this.camera.up.set(0, 1, 0);
-      this.camera.lookAt(adjusted.x, adjusted.y, adjusted.z);
-    }
-    this.camera.left = -half; this.camera.right = half;
+    // Cloud and outlines are already flattened into panel-plane XY coordinates.
+    // Orient that plane consistently with screenToPlane(), rather than looking
+    // along world axes at geometry that no longer lives in world coordinates.
+    const cx = pcx + panX, cy = pcy + panY;
+    this.camera.position.set(cx, cy, this.axis === 'front' ? 500 : -500);
+    this.camera.up.set(0, this.axis === 'top' ? -1 : 1, 0);
+    this.camera.lookAt(cx, cy, 0);
+    this.camera.left = -half * this.aspect; this.camera.right = half * this.aspect;
     this.camera.top = half; this.camera.bottom = -half;
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
@@ -244,8 +240,8 @@ export class ThreeViewPanel {
     // 相机沿平面轴移动 +pan 时画面向该轴正向的反方向滑动，故取负号。
     const sx = this.axis === 'side' ? -1 : 1;
     const sy = this.axis === 'top' ? 1 : -1;
-    this.userPanX -= (sx * dnx * 2) / this.userZoom;
-    this.userPanY -= (sy * dny * 2) / this.userZoom;
+    this.userPanX -= (sx * dnx * 2);
+    this.userPanY -= (sy * dny * 2);
   }
 
   resetUserView(): void { this.userZoom = 1; this.userPanX = 0; this.userPanY = 0; }
@@ -253,12 +249,6 @@ export class ThreeViewPanel {
   private userZoom = 1;
   private userPanX = 0;
   private userPanY = 0;
-
-  private planeToWorld(px: number, py: number): Vec3 {
-    if (this.axis === 'top') return { x: px, y: 0, z: py };
-    if (this.axis === 'front') return { x: px, y: py, z: this.viewCenter.z };
-    return { x: this.viewCenter.x, y: py, z: px };
-  }
 
   render(renderer: THREE.WebGLRenderer): void {
     renderer.render(this.scene, this.camera);

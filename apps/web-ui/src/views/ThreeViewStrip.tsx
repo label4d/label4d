@@ -29,7 +29,7 @@ export function ThreeViewStrip() {
 
       const resize = () => {
         renderer.setSize(wrap.clientWidth, wrap.clientHeight, false);
-        panel.fit(session.ego.positionAt(session.frame), 45);
+        panel.fit(session.ego.positionAt(session.frame), 45, wrap.clientWidth / Math.max(1, wrap.clientHeight));
       };
       resize();
       const observer = new ResizeObserver(resize);
@@ -97,7 +97,6 @@ export function ThreeViewStrip() {
     let rafId = 0;
     let lastCloud: unknown = null;
     let lastCloudFrame = -1;
-    let lastFocus = '';
     let lastOverlayKey = '';
     const lastDepthKeys = ['', '', ''];
     const renderLoop = () => {
@@ -109,12 +108,13 @@ export function ThreeViewStrip() {
       const focusId = session.selection.first;
       const focusState = focusId ? session.store.resolveState(focusId, frame) : null;
       const center = focusState ? focusState.pos : session.ego.positionAt(frame);
-      const half = focusState ? 12 : 45;
       panels.forEach((panel, index) => {
         const entry = refs.current[index];
         if (!entry) return;
-        const focusKey = `${frame}:${focusId}:${session.store.currentVersion}`;
-        if (focusKey !== lastFocus) panel.fit(center, half);
+        // Fit each view in metres without stretching; keep the user's pan/zoom active.
+        const aspect = entry.wrap.clientWidth / Math.max(1, entry.wrap.clientHeight);
+        const half = focusState ? Math.max(2.5, Math.hypot(focusState.size.x, focusState.size.y, focusState.size.z) * 0.85 / Math.min(1, aspect)) : 45;
+        panel.fit(center, half, aspect);
         const depthCenter = focusState ? panel.depthOf(center) : 0;
         const depthKey = `${depthCenter}:${depthHalfWindow()}`;
         if (cloud !== lastCloud || frame !== lastCloudFrame || depthKey !== lastDepthKeys[index]) {
@@ -126,7 +126,6 @@ export function ThreeViewStrip() {
         const panelRenderer = renderers[index];
         if (panelRenderer) panel.render(panelRenderer);
       });
-      lastFocus = `${frame}:${focusId}:${session.store.currentVersion}`;
       lastOverlayKey = `${frame}:${session.store.currentVersion}:${session.selection.currentVersion}:${previewKey}`;
       lastCloud = cloud;
       lastCloudFrame = frame;
@@ -145,7 +144,7 @@ export function ThreeViewStrip() {
   }, [session, depthHalf, session.manifest]);
 
   return (
-    <div className="flex min-h-0 flex-1 gap-px bg-[#1d2530]">
+    <div className="orthographic-strip">
       {AXES.map((axis, index) => (
         <div
           key={axis}
@@ -157,22 +156,22 @@ export function ThreeViewStrip() {
                 : null;
             }
           }}
-          className="relative min-h-0 flex-1 bg-[#0b0e13]"
+          className="orthographic-cell"
         >
           {index === 0 && (
-            <label className="absolute left-1 top-1 z-10 flex items-center gap-1 rounded bg-black/50 px-1 text-[9px] text-slate-300">
+            <label className="depth-control">
               深度
               <input
                 type="range"
                 min={2}
                 max={40}
                 value={depthHalf}
-                className="w-14 accent-[#2b6cff]"
+                aria-label="三视图深度"
                 onChange={(e) => setDepthHalf(Number(e.target.value))}
               />
             </label>
           )}
-          <span className="absolute right-1 top-1 z-10 rounded bg-black/50 px-1 text-[9px] text-slate-400">{AXIS_LABEL[axis]}</span>
+          <span className="orthographic-label">{AXIS_LABEL[axis]}</span>
           <canvas className="block h-full w-full" />
         </div>
       ))}

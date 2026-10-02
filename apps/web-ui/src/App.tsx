@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SessionProvider, useSession, useSessionTick } from './session/SessionProvider';
 import { Toolbar } from './panels/Toolbar';
 import { PlaybackBar } from './panels/PlaybackBar';
@@ -9,13 +9,20 @@ import { ThreeDView } from './views/ThreeDView';
 import { BevView } from './views/BevView';
 import { CameraView } from './views/CameraView';
 import { ThreeViewStrip } from './views/ThreeViewStrip';
+import { ContextBar } from './panels/ContextBar';
+import { ToolRail } from './panels/ToolRail';
+import { ResizeHandle } from './components/ResizeHandle';
+import { usePreference } from './components/usePreference';
+import { ChevronDown, ChevronUp, Crosshair, Keyboard, Radio, X } from 'lucide-react';
+import type { CSSProperties } from 'react';
 
-function Shortcuts() {
+function Shortcuts({ onHelp, onFocus }: { onHelp: () => void; onFocus: () => void }) {
   const session = useSession();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) return;
+      if (target && (target.closest('dialog[open]') || target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName))) return;
+      if (e.key === ' ' && target?.closest('button,summary,[role=separator]')) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) session.redo();
@@ -23,6 +30,10 @@ function Shortcuts() {
         return;
       }
       switch (e.key) {
+        case '?': e.preventDefault(); onHelp(); break;
+        case 'f': case 'F': e.preventDefault(); onFocus(); break;
+        case '[': e.preventDefault(); session.setFrame(session.requestedFrame - 1); break;
+        case ']': e.preventDefault(); session.setFrame(session.requestedFrame + 1); break;
         case ' ':
           e.preventDefault();
           session.playhead.toggle();
@@ -50,7 +61,7 @@ function Shortcuts() {
             session.nudgeSelection(delta);
           } else {
             const dir = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
-            if (dir !== 0) session.setFrame(session.frame + dir * (e.shiftKey ? 10 : 1));
+            if (dir !== 0) session.setFrame(session.requestedFrame + dir * (e.shiftKey ? 10 : 1));
           }
           break;
         }
@@ -82,7 +93,7 @@ function Shortcuts() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [session]);
+  }, [session, onHelp, onFocus]);
   return null;
 }
 
@@ -90,82 +101,86 @@ function SessionError() {
   const session = useSession();
   const [error, setError] = useState<string | null>(null);
   useEffect(() => session.events.on('error', ({ message }) => setError(message)), [session]);
-  return error ? <div role="alert" className="flex items-center justify-between bg-red-950 px-3 py-1 text-xs text-red-100">
-    <span>{error}</span><button onClick={() => setError(null)}>关闭</button>
+  return error ? <div role="alert" className="error-banner">
+    <span><b>操作未完成</b> {error}</span><button className="icon-button" aria-label="关闭错误提示" onClick={() => setError(null)}><X size={16} /></button>
   </div> : null;
+}
+
+function ShortcutHelp({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { if (open) ref.current?.showModal(); else ref.current?.close(); }, [open]);
+  const shortcuts = [['1 — 6', '切换标注工具'], ['Space', '播放 / 暂停'], ['[ / ]', '上一帧 / 下一帧'], ['方向键', '微调选中对象；未选中时切帧'], ['Shift + 方向键', '加大微调步长；未选中时跳 10 帧'], ['K', '设置当前帧关键帧'], ['⌘ / Ctrl + Z', '撤销'], ['⌘ / Ctrl + Shift + Z', '重做'], ['Esc', '取消当前手势'], ['Delete', '删除选中对象'], ['F', '进入 / 退出专注视图'], ['?', '快捷键帮助']];
+  return <dialog ref={ref} className="shortcut-dialog" aria-labelledby="shortcut-title" onCancel={onClose} onClose={onClose} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="dialog-title"><Keyboard size={20} /><h2 id="shortcut-title">让操作更快一点</h2><button className="icon-button" aria-label="关闭快捷键帮助" onClick={onClose}><X size={19} /></button></div>
+    <p>点击对象后，方向键会移动对象。用方括号随时切换帧。</p>
+    <dl className="shortcut-list">{shortcuts.map(([keys, description]) => <div key={keys}><dt>{description}</dt><dd><kbd>{keys}</kbd></dd></div>)}</dl>
+    <div className="dialog-foot">修改自动保存在当前浏览器。交付或备份时请导出快照。</div>
+  </dialog>;
 }
 
 function Workspace() {
   const session = useSession();
-  useSessionTick(['manifestLoaded']);
-  const [mode, setMode] = useState<'bev' | 'cloud'>('cloud');
+  useSessionTick(['manifestLoaded', 'selectionChanged', 'frameChanged', 'frameStatusChanged']);
+  const [mode, setMode] = usePreference<'bev' | 'cloud'>('view', 'cloud');
+  const [focus, setFocus] = useState(false);
+  const [wide, setWide] = useState(() => window.innerWidth >= 960);
+  useEffect(() => { const resize = () => setWide(window.innerWidth >= 960); window.addEventListener('resize', resize); return () => window.removeEventListener('resize', resize); }, []);
+  const [help, setHelp] = useState(false);
+  const [inspector, setInspector] = useState(() => window.innerWidth > 900);
+  const [inspectorWidth, setInspectorWidth] = usePreference('inspectorWidth', 308);
+  const [cameraHeight, setCameraHeight] = usePreference('cameraHeight', 158);
+  const [timelineHeight, setTimelineHeight] = usePreference('timelineHeight', 88);
+  const [timelineOpen, setTimelineOpen] = usePreference('timelineOpen', true);
   const cameraCount = session.projectors.size;
-  return (
-    <div className="flex h-screen w-screen flex-col bg-[#0b0e13] text-slate-200">
-      <Shortcuts />
-      <Toolbar />
-      <SessionError />
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-1 bg-[#10161f] px-2 py-1">
-            {(['cloud', 'bev'] as const).map((m) => (
-              <button
-                key={m}
-                className={`rounded px-3 py-1 text-[11px] ${mode === m ? 'bg-[#2b6cff] text-white' : 'bg-[#1d2530] text-slate-300 hover:bg-[#283242]'}`}
-                onClick={() => setMode(m)}
-              >
-                {m === 'cloud' ? '4D 点云模式' : 'BEV 俯视模式'}
-              </button>
-            ))}
-          </div>
-          {mode === 'cloud' ? (
-            <div className="flex min-h-0 flex-[3] gap-px bg-[#1d2530]">
-              <div className="flex min-w-0 flex-[2] flex-col">
-                <span className="viewport-title">4D 点云主视图（点云主导）</span>
-                <ThreeDView />
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="viewport-title">三视图</span>
-                <ThreeViewStrip />
-              </div>
-            </div>
-          ) : (
-            <div className="flex min-h-0 flex-[3] flex-col">
-              <span className="viewport-title">BEV 俯视图（自上而下固定视角 · 滚轮缩放 / 拖动平移 · Shift+拖动框选）</span>
-              <BevView />
-            </div>
-          )}
-          <div className="flex min-h-0 flex-[2] flex-col gap-px bg-[#1d2530] pt-px">
-            <div className="flex min-h-0 flex-1 flex-col">
-              <span className="viewport-title">
-                相机图像 · {cameraCount} 路 · 4D 投影全相机同步高亮可点选
-              </span>
-              <div className="flex min-h-0 flex-1 gap-px">
-                {Array.from({ length: Math.max(1, cameraCount) }, (_, i) => (
-                  <CameraView key={i} index={i} />
-                ))}
-                {cameraCount === 0 && <div className="flex flex-1 items-center justify-center text-[10px] text-slate-600">当前数据无相机</div>}
-              </div>
-            </div>
-          </div>
+  const style = { '--inspector-width': `${Math.min(420, Math.max(280, inspectorWidth))}px`, '--camera-height': `${Math.min(320, Math.max(90, cameraHeight))}px` } as CSSProperties;
+  const toggleFocus = () => setFocus((v) => !v);
+  return <div className="app-workspace" style={style}>
+    <Shortcuts onHelp={() => setHelp(true)} onFocus={toggleFocus} />
+    <Toolbar onToggleInspector={() => setInspector((v) => !v)} inspectorOpen={inspector} />
+    <SessionError />
+    <div className={`workspace-body ${inspector ? 'inspector-open' : ''}`}>
+      <ToolRail onHelp={() => setHelp(true)} />
+      <main className={`view-workspace ${focus ? 'is-focused' : ''}`} aria-label="多视图标注工作区">
+        <ContextBar mode={mode} onMode={setMode} focus={focus} onFocus={toggleFocus} />
+        <div className="primary-views">
+          <section className="primary-viewport" aria-label={mode === 'cloud' ? '点云主视图' : 'BEV 主视图'}>
+            <div className="viewport-heading"><span><Crosshair size={14} />{mode === 'cloud' ? '空间视图' : '俯视视图'}</span><span className="viewport-meta">{focus ? '专注视图' : '世界坐标'}<span className={`live-dot ${session.frameStatus === 'ready' ? 'ready' : ''}`} />帧 {session.frame}</span></div>
+            {mode === 'cloud' ? <ThreeDView /> : <BevView />}
+          </section>
+          {mode === 'cloud' && !focus && wide && <section className="orthographic-viewport" aria-label="正交三视图">
+            <div className="viewport-heading"><span>正交三视图</span><span className="viewport-meta">{session.selection.size ? '跟随选择' : '请选择对象'}</span></div>
+            <ThreeViewStrip />
+          </section>}
         </div>
-        <div className="flex w-64 flex-col border-l border-[#1d2530] bg-[#0e1218]">
-          <ObjectList />
-          <PropertiesPanel />
-        </div>
-      </div>
-      <div className="h-44 border-t border-[#1d2530]">
-        <Timeline />
-      </div>
-      <PlaybackBar />
+        {cameraCount > 0 && !focus && <>
+          <div className="camera-divider"><ResizeHandle axis="y" value={cameraHeight} onChange={setCameraHeight} min={90} max={320} reverse label="调整相机区域高度" /></div>
+          <section className="camera-section" aria-label="相机视图">
+            <div className="viewport-heading"><span><Radio size={14} />相机视图 <span className="count-chip">{cameraCount}</span></span><span className="viewport-meta">同步投影 · 点击选择</span></div>
+            <div className="camera-grid">{Array.from({ length: cameraCount }, (_, i) => <CameraView key={i} index={i} />)}</div>
+          </section>
+        </>}
+      </main>
+      {inspector && <>
+        <div className="inspector-divider"><ResizeHandle axis="x" value={inspectorWidth} onChange={setInspectorWidth} min={280} max={420} reverse label="调整属性面板宽度" /></div>
+        <aside className="inspector" aria-label="对象与属性">
+          <div className="inspector-heading"><span>对象与属性</span><button className="icon-button" aria-label="关闭属性面板" onClick={() => setInspector(false)}><X size={16} /></button></div>
+          <ObjectList /><PropertiesPanel />
+        </aside>
+      </>}
     </div>
-  );
+    <section className={`timeline-section ${timelineOpen ? '' : 'is-collapsed'}`} aria-label="轨迹时间轴">
+      {timelineOpen && <ResizeHandle axis="y" value={timelineHeight} onChange={setTimelineHeight} min={48} max={230} reverse label="调整时间轴高度" />}
+      <div className="timeline-heading"><button className="text-button" aria-expanded={timelineOpen} onClick={() => setTimelineOpen((v) => !v)}>{timelineOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}轨迹时间轴</button>
+        <div className="timeline-legend"><span><i className="legend-bar" />存在区间</span><span><i className="legend-diamond" />关键帧</span><span><i className="legend-line" />当前帧</span></div>
+        <span className="timeline-tip">点击轨迹名选择 · 拖动标尺切帧</span>
+      </div>
+      <div className="timeline-canvas" style={{ height: timelineOpen ? Math.min(230, Math.max(48, timelineHeight)) : 0 }}><Timeline /></div>
+    </section>
+    <PlaybackBar />
+    <ShortcutHelp open={help} onClose={() => setHelp(false)} />
+  </div>;
 }
 
 export default function App() {
-  return (
-    <SessionProvider>
-      <Workspace />
-    </SessionProvider>
-  );
+  return <SessionProvider><Workspace /></SessionProvider>;
 }
