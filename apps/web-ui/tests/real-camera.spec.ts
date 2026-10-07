@@ -20,7 +20,6 @@ test('real camera preview loads same-frame images and survives seeking and focus
   await expect(page.getByRole('status', { name: 'Potree 加载状态' })).toContainText('Potree 已显示');
   await page.getByText('点云显示', { exact: true }).click();
   await expect(page.locator('.camera-empty')).toHaveCount(0);
-  await expect(page.locator('.camera-demo-label')).toHaveCount(0);
   await expect(page.getByLabel('点云投影', { exact: true })).not.toBeChecked();
   await page.getByLabel('点云投影', { exact: true }).check();
   await expect(page.getByLabel('点云投影', { exact: true })).toBeChecked();

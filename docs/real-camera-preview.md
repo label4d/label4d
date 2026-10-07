@@ -32,7 +32,7 @@ pnpm --filter @labelfaster/web-ui exec playwright install chromium
 pnpm --filter @labelfaster/web-ui exec playwright test --workers=2
 ```
 
-浏览器测试启动独立的 4173 测试服务，该端口须空闲。缺少生成资源时真实数据用例会跳过；必须检查测试报告，不能把合成演示通过当作真实对齐证明。
+浏览器测试启动独立的 4173 测试服务，该端口须空闲。缺少生成资源时真实数据用例会跳过；必须检查测试报告，不能把合成测试样本通过当作真实对齐证明。
 
 已入库的 [官方标定、标签采样和照片哈希](../fixtures/calibration/2011_09_26/README.md) 支持独立参考检查。核心测试比较完整投影矩阵、官方照片字节、多帧人工标签中心/尺寸/朝向以及车辆框内雷达支持度；还检查多相机交替访问的缓存隔离。
 

@@ -25,7 +25,7 @@ SelectionSet / ToolMachine / Playhead]
 快照与持久编辑记录]
 ```
 
-首页默认加载 `/kitti-camera/manifest.json`；`?manifest=...` 可指定其他实际数据集，并优先于 demo 参数。仅显式打开 `?demo=1` 才使用合成演示。真实数据缺失或返回非 JSON 时显示加载错误，不自动替换为合成数据。实际资源加载后尝试导入同目录的 `snapshot.json`，再启用本地持久化，恢复该序列已有标注。
+首页默认加载 `/kitti-camera/manifest.json`；`?manifest=...` 可指定其他实际数据集。产品不再包含合成演示或 demo 参数分支。真实数据缺失或返回非 JSON 时显示加载错误，不自动替换为合成数据。实际资源加载后尝试导入同目录的 `snapshot.json`，再启用本地持久化，恢复该序列已有标注。
 
 | 边界 | 代码与职责 |
 | --- | --- |
@@ -107,4 +107,4 @@ QA 是文档整体的 pending/pass/reject 状态；编辑使其失效，撤销�
 
 Potree 使用内置 UNCOMPRESSED 解码器和 HTTP Range 读取，不加载上游 Potree viewer。选择保留加性祖先样本并按视锥、投影密度和预算细化；默认上限 480,000 点。细节见 [Potree 渲染](potree-rendering.md)。
 
-当前正式数据适配器为 KITTI tracking。模型辅助有适配接口和合成候选生成器，并未接入训练模型。其他数据集、协作后端和性能承诺都需要独立实现与验证。
+当前正式数据适配器为 KITTI tracking。核心保留模型辅助适配接口，UI 中的模拟预标注和合成候选生成器已移除，尚未接入训练模型。其他数据集、协作后端和性能承诺都需要独立实现与验证。

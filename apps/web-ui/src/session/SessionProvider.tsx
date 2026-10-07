@@ -1,9 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { EditorSession, IndexedDbDocumentStorage } from '@labelfaster/core';
-import type { SessionEvents, SnapshotDocument } from '@labelfaster/core';
+import type { SessionEvents } from '@labelfaster/core';
 import { installTestProbe } from './testProbe';
-import { buildDemoManifest, demoFetchImage, demoNet, demoSeedSnapshot } from '../lib/demo';
 
 const SessionContext = createContext<EditorSession | null>(null);
 
@@ -13,9 +12,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const explicitManifest = params.get('manifest');
-    const isDemo = !explicitManifest && params.get('demo') === '1';
     const manifestUrl = explicitManifest || '/kitti-camera/manifest.json';
-    const next = new EditorSession(isDemo ? { net: demoNet, fetchImage: demoFetchImage } : {});
+    const next = new EditorSession();
     let active = true;
     const removeProbe = installTestProbe(next);
     const onPageHide = () => { active = false; next.dispose(); };
@@ -27,26 +25,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void (async () => {
       let documentLoaded = false;
       try {
-        if (!isDemo) {
-          const response = await fetch(manifestUrl);
-          if (!response.ok) throw new Error(`${manifestUrl}：HTTP ${response.status}`);
-          if (!response.headers.get('content-type')?.includes('application/json')) {
-            throw new Error(`${manifestUrl} 未返回 JSON，请确认数据已准备且服务路径正确`);
-          }
-          const manifest = await response.json();
-          if (!active) return;
-          await next.loadManifest(manifest);
-          if (!active) return;
-          const snapshotUrl = new URL('snapshot.json', new URL(manifestUrl, window.location.href)).href;
-          const snapshot = await fetch(snapshotUrl);
-          if (snapshot.ok && snapshot.headers.get('content-type')?.includes('application/json') && active) next.importSnapshot(await snapshot.json());
-        } else {
-          await next.loadManifest(buildDemoManifest());
-          if (!active) return;
-          next.heightPolicy = 'zero-plane'; // demo explicitly declares a flat ground plane
-          next.importSnapshot(demoSeedSnapshot('demo_sequence') as unknown as SnapshotDocument);
-          next.selection.select(['trk_000001']);
+        const response = await fetch(manifestUrl);
+        if (!response.ok) throw new Error(`${manifestUrl}：HTTP ${response.status}`);
+        if (!response.headers.get('content-type')?.includes('application/json')) {
+          throw new Error(`${manifestUrl} 未返回 JSON，请确认数据已准备且服务路径正确`);
         }
+        const manifest = await response.json();
+        if (!active) return;
+        await next.loadManifest(manifest);
+        if (!active) return;
+        const snapshotUrl = new URL('snapshot.json', new URL(manifestUrl, window.location.href)).href;
+        const snapshot = await fetch(snapshotUrl);
+        if (snapshot.ok && snapshot.headers.get('content-type')?.includes('application/json') && active) next.importSnapshot(await snapshot.json());
         documentLoaded = true;
         if (active) await next.enablePersistence(new IndexedDbDocumentStorage());
       } catch (error) {
@@ -66,8 +56,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
   if (startupError) return <div role="alert" className="error-banner">
     <div><b>数据加载失败</b><p>{startupError}</p>
-      <p>请先导入 KITTI 数据，或通过 manifest 参数指定已有数据集。合成演示仅供体验编辑功能。</p>
-      <button onClick={() => window.location.reload()}>重新加载</button>{' '}<a href="/?demo=1">打开合成演示</a>
+      <p>请先导入 KITTI 数据，或通过 manifest 参数指定已有数据集。</p>
+      <button onClick={() => window.location.reload()}>重新加载</button>
     </div>
   </div>;
   return session ? <SessionContext.Provider value={session}>{children}</SessionContext.Provider> : null;

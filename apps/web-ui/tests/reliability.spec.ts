@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, editorUrl, selectFirstTrack } from './editorFixture';
 import type { Page } from '@playwright/test';
 
 async function read(page: Page) {
@@ -16,8 +16,9 @@ async function read(page: Page) {
 test('precise edit, save, undo, reload and redo use the production UI', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(String(error)));
-  await page.goto('/?demo=1');
+  await page.goto(editorUrl);
   await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r0');
+  await selectFirstTrack(page);
   const x = page.getByLabel('x', { exact: true });
   const original = await x.inputValue();
   await x.fill('18'); await x.press('Tab');
@@ -28,6 +29,7 @@ test('precise edit, save, undo, reload and redo use the production UI', async ({
   await expect(x).toHaveValue(original);
   await page.reload();
   await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r2');
+  await selectFirstTrack(page);
   await expect(page.getByLabel('x', { exact: true })).toHaveValue(original);
   await page.getByRole('button', { name: '↪ 重做', exact: true }).click();
   await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r3');
@@ -36,16 +38,18 @@ test('precise edit, save, undo, reload and redo use the production UI', async ({
 });
 
 test('a second tab cannot write the same document', async ({ context, page }) => {
-  await page.goto('/?demo=1'); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存');
-  const other = await context.newPage(); await other.goto('/?demo=1');
+  await page.goto(editorUrl); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存');
+  await selectFirstTrack(page);
+  const other = await context.newPage(); await other.goto(editorUrl);
   await expect(other.getByRole('alert')).toContainText('another tab');
+  await selectFirstTrack(other);
   await expect(other.getByLabel('x', { exact: true })).toBeDisabled();
   await expect(page.getByLabel('x', { exact: true })).toBeEnabled();
   await other.close();
 });
 
 test('BEV drawing on empty ground commits once, and Escape cancels the next gesture', async ({ page }) => {
-  await page.goto('/?demo=1'); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r0');
+  await page.goto(editorUrl); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r0');
   await page.getByRole('button', { name: 'BEV 俯视模式', exact: true }).click();
   await page.getByRole('button', { name: '3D框', exact: true }).click();
   const canvas = page.locator('canvas').first(); const rect = (await canvas.boundingBox())!;

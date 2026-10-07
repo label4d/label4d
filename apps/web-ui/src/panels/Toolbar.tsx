@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
-import { Check, CircleDashed, CloudOff, Download, FileJson, FolderOpen, Loader2, PanelRight, Sparkles, Upload } from 'lucide-react';
+import { Check, CircleDashed, CloudOff, Download, FileJson, FolderOpen, Loader2, PanelRight, Upload } from 'lucide-react';
 import { useSession, useSessionTick } from '../session/SessionProvider';
-import { DemoAssistAdapter } from '../lib/demo';
 import { BrandMark } from '../components/BrandMark';
 import { Dropdown } from '../components/Dropdown';
 import type { SnapshotDocument } from '@labelfaster/core';
@@ -10,7 +9,6 @@ export function Toolbar({ onToggleInspector, inspectorOpen }: { onToggleInspecto
   const session = useSession();
   useSessionTick(['manifestLoaded', 'qaChanged', 'saveChanged', 'frameStatusChanged']);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const saved = session.saveStatus === 'saved';
   const loading = ['saving', 'loading'].includes(session.saveStatus);
@@ -22,7 +20,7 @@ export function Toolbar({ onToggleInspector, inspectorOpen }: { onToggleInspecto
   return <header className="app-header">
     <div className="brand"><BrandMark /><span>Labelfaster <small>4D</small></span></div>
     <div className="sequence-heading"><FolderOpen size={16} /><span>{session.manifest?.id ?? '加载序列…'}</span>
-      <span className="sequence-kind">{session.manifest?.id === 'demo_sequence' ? '演示序列' : '标注序列'}</span></div>
+      <span className="sequence-kind">标注序列</span></div>
     <div className="header-actions">
       <div className={`save-indicator ${saved ? 'is-saved' : session.saveStatus === 'error' ? 'is-error' : ''}`}>
         {saved ? <Check size={15} /> : loading ? <Loader2 size={15} className="spin" /> : <CloudOff size={15} />}
@@ -39,17 +37,11 @@ export function Toolbar({ onToggleInspector, inspectorOpen }: { onToggleInspecto
       <Dropdown label="文件与导出" className="file-dropdown">
         <div className="menu-heading">打开序列</div>
         <a className="menu-action" href="?manifest=/kitti-camera/manifest.json"><FolderOpen size={16} /><span>KITTI 真实相机序列<small>200 帧照片与同帧点云 · 需准备本地数据</small></span></a>
-        <a className="menu-action" href="/"><FolderOpen size={16} /><span>合成演示序列<small>生成的点云与道路示意图</small></span></a>
         <div className="menu-divider" />
         <div className="menu-heading">序列文件</div>
         <button className="menu-action" disabled={!session.canEdit} onClick={() => fileRef.current?.click()}><Upload size={16} /><span>导入快照<small>替换当前序列的标注</small></span></button>
         <button className="menu-action" disabled={loading} onClick={() => download(session.exportSnapshot(), `${session.manifest?.id ?? 'sequence'}.snapshot.json`)}><Download size={16} /><span>导出快照<small>当前已提交的标注内容</small></span></button>
         <button className="menu-action" disabled={loading} onClick={() => download(session.exportNuScenes({ sampleStep: 5 }), `${session.manifest?.id ?? 'sequence'}.nuscenes.json`)}><FileJson size={16} /><span>导出 nuScenes 草稿<small>草稿格式，尚未完成兼容验收</small></span></button>
-        <div className="menu-divider" />
-        <button className="menu-action" disabled={busy || !session.canEdit} onClick={async () => {
-          setBusy(true); try { const count = await session.runAssist(new DemoAssistAdapter(session.frameCount), 0.5); setNotice(`已导入 ${count} 条演示候选轨迹，可单步撤销`); }
-          catch (error) { session.events.emit('error', { message: String(error) }); } finally { setBusy(false); }
-        }}><Sparkles size={16} /><span>{busy ? '生成候选中…' : '模型预标注'}<small>当前使用演示候选生成器</small></span></button>
       </Dropdown>
       <button className={`icon-button inspector-toggle ${inspectorOpen ? 'is-active' : ''}`} aria-label="切换属性面板" aria-pressed={inspectorOpen} title="显示或隐藏对象与属性" onClick={onToggleInspector}><PanelRight size={19} /></button>
     </div>

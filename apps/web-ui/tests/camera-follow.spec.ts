@@ -1,19 +1,16 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, editorUrl, editorManifest } from './editorFixture';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 const realManifest = fileURLToPath(new URL('../public/kitti-camera/manifest.json', import.meta.url));
 
-for (const dataset of ['demo', 'kitti']) {
+for (const dataset of ['fixture', 'kitti']) {
 test(`${dataset}: 3D follow keeps the camera rigidly attached during playback, seek and user orbit`, async ({ page }) => {
   test.skip(dataset === 'kitti' && !existsSync(realManifest), 'Generate the official camera preview first');
-  await page.goto(dataset === 'demo' ? '/?demo=1' : '/?manifest=/kitti-camera/manifest.json');
+  await page.goto(dataset === 'fixture' ? editorUrl : '/?manifest=/kitti-camera/manifest.json');
   await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存');
   const view = page.getByTestId('cloud-view');
-  const manifest = dataset === 'kitti' ? JSON.parse(readFileSync(realManifest, 'utf8')) : await page.evaluate(async () => {
-    const { buildDemoManifest } = await import('/src/lib/demo.ts');
-    return buildDemoManifest();
-  });
+  const manifest = dataset === 'kitti' ? JSON.parse(readFileSync(realManifest, 'utf8')) : editorManifest;
   const relative = async () => {
     const state = JSON.parse((await view.getAttribute('data-camera'))!);
     const pose = new Matrix4().fromArray(manifest.egoPoses[state.frame]);

@@ -12,7 +12,7 @@ export function CameraView({ index = 0 }: { index?: number }) {
   const session = useSession();
   useSessionTick(['frameChanged', 'frameStatusChanged', 'manifestLoaded', 'storeChanged']);
   const viewRef = useRef<CameraImageView | null>(null);
-  const [cloudProjection, setCloudProjection] = useState(session.manifest?.id === 'demo_sequence');
+  const [cloudProjection, setCloudProjection] = useState(false);
   const projectionRef = useRef(cloudProjection);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -199,7 +199,6 @@ export function CameraView({ index = 0 }: { index?: number }) {
         </select>
         <label className="camera-cloud-toggle"><input type="checkbox" checked={cloudProjection} onChange={(e) => { setCloudProjection(e.target.checked); projectionRef.current = e.target.checked; viewRef.current?.setOptions({ cloudProjection: e.target.checked }); }} />点云投影</label>
       </div>
-      {session.manifest?.id === 'demo_sequence' && <span className="camera-demo-label">合成示意图</span>}
       {session.frameStatus === 'ready' && !session.currentCameraImage(cameraId ?? cameras[Math.min(index, cameras.length - 1)]) && <div className="camera-empty">当前帧无相机图像</div>}
 
       {editor && editorTrack && (

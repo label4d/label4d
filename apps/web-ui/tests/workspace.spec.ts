@@ -1,7 +1,8 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, editorUrl, selectFirstTrack } from './editorFixture';
 
 const ready = async (page: import('@playwright/test').Page) => {
-  await page.goto('/?demo=1'); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r0');
+  await page.goto(editorUrl); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r0');
+  await selectFirstTrack(page);
 };
 
 test('frame entry, keyframe jumps and Escape use the selected track without unintended edits', async ({ page }) => {

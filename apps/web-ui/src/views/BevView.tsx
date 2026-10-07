@@ -12,10 +12,8 @@ import {
 } from '@labelfaster/core';
 import type { ToolContext } from '@labelfaster/core';
 import { useSession } from '../session/SessionProvider';
-import { demoFetchImage } from '../lib/demo';
 
 function loadImage(url: string): Promise<ImageBitmap | HTMLImageElement> {
-  if (url.startsWith('demo://')) return demoFetchImage(url);
   return fetch(url)
     .then((r) => { if (!r.ok) throw new Error(`BEV HTTP ${r.status}`); return r.blob(); })
     .then((blob) => createImageBitmap(blob, { imageOrientation: 'flipY' }));

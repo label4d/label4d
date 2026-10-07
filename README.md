@@ -12,7 +12,7 @@ Labelfaster combines a React/Three.js editor, a TypeScript annotation engine, an
 - Track keyframes, interpolation, object attributes, static geometry, selection and undo/redo.
 - Playback and seeking with separate requested and presented frames. Both 3D and BEV follow the ego vehicle by default.
 - Local IndexedDB persistence and JSON snapshot import/export.
-- A self-contained synthetic demo and a reusable KITTI tracking importer.
+- A reusable KITTI tracking importer.
 
 The runtime uses **v1, right-handed Y-up coordinates**. It is a local, single-editor application; a collaboration server, v2 timestamp model and other dataset adapters are future work. See the [roadmap](docs/roadmap.md).
 
@@ -27,7 +27,7 @@ pnpm dev
 
 Open the URL printed by Vite, normally `http://localhost:5173`. The home page loads `/kitti-camera/manifest.json` by default. Prepare that real dataset with `pnpm fixtures:camera-preview` (requires Python/uv and PotreeConverter), or use `?manifest=...` for another imported dataset. Missing real data produces an explicit error; there is no synthetic fallback.
 
-For a self-contained synthetic editor demo without downloads, open `/?demo=1`. Synthetic images, points and tracks are for interaction tests, not real-data alignment. An explicit `manifest` takes priority over `demo`. Development resolves the core package directly from source.
+Development resolves the core package directly from source. The application has no synthetic demo or mock model pre-annotation. Small static inputs under `apps/web-ui/tests/fixtures/` are used only by automated tests and are not bundled.
 
 For a production build:
 
@@ -78,7 +78,7 @@ pnpm --filter @labelfaster/web-ui exec playwright install chromium
 pnpm --filter @labelfaster/web-ui exec playwright test --workers=2
 ```
 
-Playwright starts its own test server on port **4173**, which must be free. Real-data tests skip when their generated assets are absent; a passing demo test run does not establish real-data alignment. Python tool tests include a small, generated input independent of the real preview.
+Playwright starts its own test server on port **4173**, which must be free. Real-data tests skip when their generated assets are absent; a passing editor fixture test run does not establish real-data alignment. Python tool tests include a small, generated input independent of the real preview.
 
 Annotation saves are local to the browser profile and origin. Export snapshots for backup before clearing browser data or changing origins; generated datasets and saved annotation documents are different artifacts.
 
