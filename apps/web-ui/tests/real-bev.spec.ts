@@ -16,6 +16,7 @@ test('real BEV loads the aligned map, selects in screen space and follows presen
   await page.getByRole('button', { name: 'BEV 俯视模式', exact: true }).click();
   expect((await map).status()).toBe(200);
   await expect(page.getByRole('status', { name: 'BEV 底图状态' })).toHaveText('底图已加载');
+  await expect(page.getByLabel('跟随自车', { exact: true })).toBeChecked();
   const view = page.getByTestId('bev-view');
   await expect(view).toHaveAttribute('data-cloud-frame', '0');
   await expect.poll(async () => Number(await view.getAttribute('data-cloud-points'))).toBeGreaterThan(100_000);

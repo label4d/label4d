@@ -20,7 +20,7 @@ export function ThreeDView() {
   const session = useSession();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [follow, setFollow] = useState(false);
+  const [follow, setFollow] = useState(true);
   const [density, setDensity] = useState(2);
   const densityRef = useRef(2);
   const [pointSize, setPointSize] = useState(CLOUD_POINT_SIZE);

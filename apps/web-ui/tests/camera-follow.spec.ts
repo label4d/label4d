@@ -25,7 +25,7 @@ test(`${dataset}: 3D follow keeps the camera rigidly attached during playback, s
     a.target.forEach((value, i) => expect(value).toBeCloseTo(b.target[i], 6));
   };
   await page.getByText('点云显示', { exact: true }).click();
-  await page.getByLabel('跟随自车', { exact: true }).check();
+  await expect(page.getByLabel('跟随自车', { exact: true })).toBeChecked();
   const initial = await relative();
   await page.getByText('点云显示', { exact: true }).click();
   await page.getByRole('button', { name: '播放', exact: true }).click();
