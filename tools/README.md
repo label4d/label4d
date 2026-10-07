@@ -57,11 +57,9 @@ pnpm data:import:kitti \
 | `py/export_world_las.py` | 世界 PCD → LAS；`pnpm data:export:las --input <work-dir> --output <file.las>` |
 | `py/build_world_cloud.py` | 既有世界点云分块工具 |
 | `py/build_bev_map.py`、`py/build_bev_pyramid.py` | 历史 BEV/高度图生成工具；正式导入优先使用上面的流程，历史路径默认值需自行配置 |
-| `data/kitti-calibration.mjs` | 历史 R-mini 标定辅助；当前正式导入使用 Python 的官方 tracking 标定链 |
-| `data/make-bev-tiles.mjs`、`data/probe-kitti-mapping.mjs`、`data/calib-selftest.mjs` | 历史生成/诊断工具，保留兼容，后续新增数值功能采用 Python |
-| `data/validate-manifest.mjs` | 历史 v2 fixture schema 验证；当前正式导入输出 v1 Y-up |
+| `py/validate_manifest.py` | Fixture JSON Schema 子集及时间单调性验证；`pnpm fixtures:validate` 与预检共用 |
 
-`scripts/` 中保留兼容命令及 fixture 调度，不重复实现正式转换逻辑。旧 `scripts/convert-kitti-tracking.mjs` 现在转发 Python 参数，拒绝原来的 raw-drive 混配调用。`pnpm fixtures:camera-preview` 调用相同正式工具，生成 0011 前 200 帧预览。
+已删除重复的 JS 转换、标定、BEV 生成、配对探测工具及兼容入口，不再维护两套实现。失配的旧 R-mini 生成器也已移除，现有历史 fixture 保留用于契约审计；真实数据导入使用 Python 正式入口。`scripts/` 仅保留 fixture 调度、合成样本生成和工程检查。`pnpm fixtures:camera-preview` 调用正式 Python 工具，生成 0011 前 200 帧预览。
 
 ## 验证与入库
 

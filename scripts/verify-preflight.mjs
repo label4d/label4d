@@ -7,7 +7,7 @@
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { validateAgainstSchema } from './validate-manifest.mjs';
+import { spawnSync } from 'node:child_process';
 
 const results = [];
 const add = (id, status, detail) => {
@@ -30,9 +30,15 @@ if (existsSync(schemaPath)) {
   const samplesDir = 'fixtures/schemas/samples';
   if (existsSync(samplesDir)) {
     let pass = 0, fail = 0;
-    for (const f of readdirSync(samplesDir)) {
-      const doc = JSON.parse(readFileSync(`${samplesDir}/${f}`, 'utf8'));
-      const errors = validateAgainstSchema(doc, schemaPath);
+    const files = readdirSync(samplesDir).filter((f) => f.endsWith('.json'));
+    const validation = spawnSync('uv', ['run', '--project', 'tools/py', 'python', 'tools/py/validate_manifest.py', '--json', schemaPath, ...files.map((f) => `${samplesDir}/${f}`)], { encoding: 'utf8' });
+    if (validation.error || ![0, 1].includes(validation.status)) {
+      console.error(`Schema validator failed: ${validation.error?.message ?? validation.stderr}`);
+      process.exit(3);
+    }
+    const validations = JSON.parse(validation.stdout);
+    for (const [i, f] of files.entries()) {
+      const errors = validations[i].errors;
       const shouldBeValid = !f.includes('invalid');
       if (shouldBeValid && errors.length === 0) pass++;
       else if (!shouldBeValid && errors.length > 0) pass++;

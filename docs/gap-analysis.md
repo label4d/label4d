@@ -1,5 +1,6 @@
 # M1 差距表（实施 AI 代码审计基线）
 
+> 历史记录：本页中的 JS 转换/BEV 工具已移除，失配的 raw/tracking 组合不能作为对齐证明。当前导入实现和命令见 [数据工具](../tools/README.md)。
 日期：2026-09-16。审计对象：commit `40554e4` 的实际代码（非历史声明）。
 对照规范：`docs/delivery-contracts.md`、`docs/domain-and-streaming-design.md`、`docs/acceptance-checklist.md`。
 状态定义：**已有待验证**（功能存在，按 M1 流程重验）/ **需修改**（存在但不符合契约）/ **缺失**（无实现）/ **缺外部输入**（依赖未到位）/ **M1 范围外**。
@@ -17,8 +18,8 @@
 |---|---|---|---|
 | ENV-01 | 已有待验证 | `package.json`（root/scripts）、`.gitignore` | 缺 `verify:*` 命令与隔离 profile 约定 |
 | DATA-01 | 缺失 | 无 S-mini 夹具；`apps/web-ui/src/lib/demo.ts` 是浏览器内造数据，契约明确不允许替代生产加载管线 | 需 S-mini 生成器（文件型资产 + manifest v2 + 独立答案，不调用产品数学） |
-| DATA-02 | 缺外部输入（可补齐） | `/tmp/kitti4d/raw_drive.zip` 有 image_02/oxts/velodyne；`scripts/convert-kitti-tracking.mjs` 已验证 velo→imu→ENU 链路 | R-mini 组装脚本未写；相机帧/标定未提取登记；BEV 配准底图现有产物基于旧坐标系 |
-| DATA-03 | 需修改 | 世界系为 Y-up（`packages/core/src/geometry/math.ts` composeBoxMatrix 绕 Y；`scripts/convert-kitti-tracking.mjs` AXIS_MAP） | 契约要求 Z-up 右手、`T_to_from` 列主序、timeUs、像素中心语义；v1 数据需迁移适配器 |
+| DATA-02 | 缺外部输入（可补齐） | `/tmp/kitti4d/raw_drive.zip` 有 image_02/oxts/velodyne；旧转换脚本曾验证内部变换，但未证明录制身份 | R-mini 组装脚本未写；相机帧/标定未提取登记；BEV 配准底图现有产物基于旧坐标系 |
+| DATA-03 | 需修改 | 世界系为 Y-up（`packages/core/src/geometry/math.ts` composeBoxMatrix 绕 Y；当前 Python 导入的 BASIS） | 契约要求 Z-up 右手、`T_to_from` 列主序、timeUs、像素中心语义；v1 数据需迁移适配器 |
 | DOM-01 | 已有待验证 | `packages/core/src/model/TrackStore.ts`（关键帧/插值/区间）、`test/store.test.ts` | 现实现用闭区间；半开区间契约需迁移。插值帧编辑创建关键帧行为已有（`EditorSession.setKeyframeAtCurrentFrame`） |
 | DOM-02 | 部分已有 | `interaction/ToolMachine.ts`（一次手势一个意图→一条命令；Esc 取消）、`render/TrackInstanceRenderer.ts`（预览在渲染层） | 无 ChangeSet/影响区间/基准 revision 冲突检测（D2 范围） |
 | DOM-03 | 需修改 | `model/TrackStore.ts` frameAttrs（Map<frame, attrs> 挂在轨迹上） | 契约要求独立 AttributeStore（key/scope object·sensor/时间区间覆盖/优先级/default-unknown），当前 keyframe-attached 语义不同 |
@@ -49,7 +50,7 @@
 | 点云 | ✅ 373 帧已验证可解析 | raw_drive.zip → velodyne_points |
 | 相机 | ✅ zip 内 image_02 373 帧（未提取登记） | 同上 |
 | Pose/标定 | ✅ oxts + calib_velo_to_cam/imu_to_velo/cam_to_cam（已实证可用） | 同上 + calib_date |
-| BEV 配准底图 | ✅ 可由点云正射投影生成（与点云同源即配准）；旧产物坐标系需重生成 | scripts/make-bev-tiles.mjs |
+| BEV 配准底图 | ✅ 可由点云正射投影生成（与点云同源即配准）；旧产物坐标系需重生成 | tools/py/build_tracking_bev.py |
 | 参考答案 | ✅ KITTI tracking 0011 官方人工标注（60 轨迹） | labels.zip（已校验解压） |
 | 连续时长 | 37.3s（373 帧 @10Hz）✅ 满足 20–60s | — |
 
