@@ -25,7 +25,7 @@ SelectionSet / ToolMachine / Playhead]
 快照与持久编辑记录]
 ```
 
-无 manifest 查询参数时，`SessionProvider` 使用自包含合成演示；指定 `?manifest=...` 时加载实际资源，并尝试导入同目录的 `snapshot.json`。种子导入后启用本地持久化，恢复该序列已有标注。
+首页默认加载 `/kitti-camera/manifest.json`；`?manifest=...` 可指定其他实际数据集，并优先于 demo 参数。仅显式打开 `?demo=1` 才使用合成演示。真实数据缺失或返回非 JSON 时显示加载错误，不自动替换为合成数据。实际资源加载后尝试导入同目录的 `snapshot.json`，再启用本地持久化，恢复该序列已有标注。
 
 | 边界 | 代码与职责 |
 | --- | --- |

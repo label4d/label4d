@@ -8,7 +8,7 @@ test('real camera preview loads same-frame images and survives seeking and focus
   page.on('pageerror', (e) => errors.push(String(e)));
   const tree = page.waitForResponse((r) => r.url().endsWith('/kitti-camera/potree/octree.bin') && r.status() === 206);
   const image0 = page.waitForResponse((r) => r.url().endsWith('/kitti-camera/images/0.png'));
-  await page.goto('/?manifest=/kitti-camera/manifest.json');
+  await page.goto('/');
   const response = await image0;
   expect(response.status()).toBe(200);
   const png = await response.body();

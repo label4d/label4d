@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 const ready = async (page: import('@playwright/test').Page) => {
-  await page.goto('/'); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r0');
+  await page.goto('/?demo=1'); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r0');
 };
 
 test('frame entry, keyframe jumps and Escape use the selected track without unintended edits', async ({ page }) => {

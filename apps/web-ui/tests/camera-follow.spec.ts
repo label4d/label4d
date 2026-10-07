@@ -7,7 +7,7 @@ const realManifest = fileURLToPath(new URL('../public/kitti-camera/manifest.json
 for (const dataset of ['demo', 'kitti']) {
 test(`${dataset}: 3D follow keeps the camera rigidly attached during playback, seek and user orbit`, async ({ page }) => {
   test.skip(dataset === 'kitti' && !existsSync(realManifest), 'Generate the official camera preview first');
-  await page.goto(dataset === 'demo' ? '/' : '/?manifest=/kitti-camera/manifest.json');
+  await page.goto(dataset === 'demo' ? '/?demo=1' : '/?manifest=/kitti-camera/manifest.json');
   await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存');
   const view = page.getByTestId('cloud-view');
   const manifest = dataset === 'kitti' ? JSON.parse(readFileSync(realManifest, 'utf8')) : await page.evaluate(async () => {

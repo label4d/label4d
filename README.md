@@ -25,7 +25,9 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open the URL printed by Vite, normally `http://localhost:5173`. The synthetic demo needs no external dataset. Development resolves the core package directly from source.
+Open the URL printed by Vite, normally `http://localhost:5173`. The home page loads `/kitti-camera/manifest.json` by default. Prepare that real dataset with `pnpm fixtures:camera-preview` (requires Python/uv and PotreeConverter), or use `?manifest=...` for another imported dataset. Missing real data produces an explicit error; there is no synthetic fallback.
+
+For a self-contained synthetic editor demo without downloads, open `/?demo=1`. Synthetic images, points and tracks are for interaction tests, not real-data alignment. An explicit `manifest` takes priority over `demo`. Development resolves the core package directly from source.
 
 For a production build:
 

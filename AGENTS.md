@@ -21,6 +21,7 @@ Inspect `git status` before editing. Preserve unrelated work and saved annotatio
 - Sequence identity determines persisted-document restoration. A different recording or coordinate version needs a different ID. Never clear browser storage to hide a seed-data mismatch.
 - Keep edits atomic and reversible. When persistence is enabled, maintain commit-before-publish behavior and report save failures accurately. QA invalidation must participate in undo/redo.
 - Release event listeners, scheduler entries, GPU resources and decoded images on disposal. Late loads must not resurrect obsolete views or frames. A checked layer toggle is not evidence that points were rendered.
+- The home page defaults to `/kitti-camera/manifest.json`; only `?demo=1` enables synthetic data, and an explicit manifest takes priority. Never silently fall back to synthetic data on a real-data failure.
 - Treat synthetic data as synthetic. Do not infer real alignment or production-scale performance from demo tests or internally self-consistent transforms.
 
 ## Development and verification

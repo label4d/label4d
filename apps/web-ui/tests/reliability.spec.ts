@@ -16,7 +16,7 @@ async function read(page: Page) {
 test('precise edit, save, undo, reload and redo use the production UI', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(String(error)));
-  await page.goto('/');
+  await page.goto('/?demo=1');
   await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r0');
   const x = page.getByLabel('x', { exact: true });
   const original = await x.inputValue();
@@ -36,8 +36,8 @@ test('precise edit, save, undo, reload and redo use the production UI', async ({
 });
 
 test('a second tab cannot write the same document', async ({ context, page }) => {
-  await page.goto('/'); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存');
-  const other = await context.newPage(); await other.goto('/');
+  await page.goto('/?demo=1'); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存');
+  const other = await context.newPage(); await other.goto('/?demo=1');
   await expect(other.getByRole('alert')).toContainText('another tab');
   await expect(other.getByLabel('x', { exact: true })).toBeDisabled();
   await expect(page.getByLabel('x', { exact: true })).toBeEnabled();
@@ -45,7 +45,7 @@ test('a second tab cannot write the same document', async ({ context, page }) =>
 });
 
 test('BEV drawing on empty ground commits once, and Escape cancels the next gesture', async ({ page }) => {
-  await page.goto('/'); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r0');
+  await page.goto('/?demo=1'); await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存 r0');
   await page.getByRole('button', { name: 'BEV 俯视模式', exact: true }).click();
   await page.getByRole('button', { name: '3D框', exact: true }).click();
   const canvas = page.locator('canvas').first(); const rect = (await canvas.boundingBox())!;
