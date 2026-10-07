@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
-import { camera2Config, AXIS_MAP } from './kitti-calibration.mjs';
+import { camera2Config, AXIS_MAP } from '../../tools/data/kitti-calibration.mjs';
 
 const SRC = '/tmp/kitti4d';
 const ZIP = join(SRC, 'raw_drive.zip');

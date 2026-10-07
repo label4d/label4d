@@ -2,6 +2,8 @@
 
 执行 `pnpm fixtures:camera-preview`，打开 `/?manifest=/kitti-camera/manifest.json`（或「文件与导出 → KITTI 真实相机序列」）。首次运行按官方 ZIP 字节范围获取 tracking 0011 前 200 帧，下载缓存不入 Git。需 Python、uv 和已构建的 PotreeConverter；见 `third_party/POTREE_BUILD.md`，也可设置 `LABELFASTER_POTREE_CONVERTER`。
 
+正式导入、点云过滤、bbox 转换和 BEV 计算已统一到 `tools/py/`，此预览复用同一套工具。导入新序列的参数、目录布局与命令见 [数据工具说明](../tools/README.md)。
+
 ## 纠正的数据来源
 
 旧版本错误地将 raw drive 0084 的照片、雷达和位姿与 tracking 0011 的标签配对。相同的帧数、点数或自洽的变换不能证明不同录制对应；官方照片的直接比较确认了这次混配。旧 R-mini 不能继续作为 tracking 0011 的对齐验收证据，生成器已加入首帧官方照片哈希检查以阻止重建错误混配。

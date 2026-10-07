@@ -2,11 +2,12 @@
 import importlib.util
 import json
 import unittest
+import pathlib
 
 import numpy as np
 from PIL import Image
 
-spec = importlib.util.spec_from_file_location('bev', __file__.replace('test-tracking-bev.py', 'build-tracking-bev.py'))
+spec = importlib.util.spec_from_file_location('bev', pathlib.Path(__file__).resolve().parents[1] / 'build_tracking_bev.py')
 bev = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bev)
 
@@ -16,6 +17,7 @@ class BevAlignment(unittest.TestCase):
         points = np.array([[10.1, 50, -19.9], [10.9, -50, -19.1], [11.1, 0, -19.9], [9.9, 0, -20]])
         self.assertEqual(bev.pixel_indices(points, np.array([10, -20]), .5, 4).tolist(), [0, 5, 2])
 
+    @unittest.skipUnless((bev.OUT / 'bev/map.png').exists(), 'Generate the real camera fixture first')
     def test_real_static_points_land_on_occupied_pixels(self):
         manifest = json.loads((bev.OUT / 'manifest.json').read_text())
         config = manifest['bev']['tileset']

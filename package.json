@@ -18,7 +18,12 @@
     "verify:faults": "echo BLOCKED: F01-F06 lands with H4 && exit 2",
     "verify:exports": "echo BLOCKED: independent export validator lands with H3 && exit 2",
     "verify:performance": "echo BLOCKED: L-scale perf lands in S3 && exit 2",
-    "fixtures:world": "uv run --project tools/py python tools/py/build_world_cloud.py --input apps/web-ui/public/kitti --output apps/web-ui/public/kitti"
+    "fixtures:world": "uv run --project tools/py python tools/py/build_world_cloud.py --input apps/web-ui/public/kitti --output apps/web-ui/public/kitti",
+    "data:import:kitti": "uv run --project tools/py python tools/py/import_kitti_tracking.py",
+    "data:fetch:kitti": "uv run --project tools/py python tools/py/fetch_tracking_source.py",
+    "data:bev": "uv run --project tools/py python tools/py/build_tracking_bev.py",
+    "data:export:las": "uv run --project tools/py python tools/py/export_world_las.py",
+    "test:tools": "uv run --project tools/py python -m unittest discover -s tools/py/tests -p \"test_*.py\""
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "6.21.0",

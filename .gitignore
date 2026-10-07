@@ -28,3 +28,6 @@ fixtures/kitti-tracking-source/
 
 # Python tool bytecode
 __pycache__/
+
+# User-imported generated datasets
+apps/web-ui/public/datasets/

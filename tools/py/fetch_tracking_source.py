@@ -1,7 +1,16 @@
-"""Fetch only tracking 0011 frames 0..199 using validated ZIP byte ranges."""
-import io, urllib.request, zipfile, pathlib, time
+"""Fetch a KITTI tracking sequence using validated ZIP byte ranges."""
+import io, urllib.request, zipfile, pathlib, time, argparse, json
 ROOT=pathlib.Path(__file__).resolve().parents[2]
-OUT=ROOT/'fixtures/kitti-tracking-source'
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--output',type=pathlib.Path,required=True)
+parser.add_argument('--sequence',required=True)
+parser.add_argument('--frames',type=int,default=200)
+args=parser.parse_args()
+if len(args.sequence)!=4 or not args.sequence.isdigit() or args.frames<1:parser.error('Use a four-digit sequence and positive frame count')
+OUT=args.output
+identity=OUT/'source.json'
+if OUT.exists() and any(OUT.iterdir()) and not identity.exists():parser.error('Existing cache lacks source identity; use a fresh output directory')
+if identity.exists() and json.loads(identity.read_text())['sequence']!=args.sequence:parser.error('Cache belongs to another sequence')
 BASE='https://s3.eu-central-1.amazonaws.com/avg-kitti/'
 class Remote(io.RawIOBase):
  def __init__(self,url):
@@ -40,18 +49,19 @@ class Remote(io.RawIOBase):
   if copied!=end-start:raise IOError('Incomplete download')
   self.cache=(start,end,target)
 OUT.mkdir(parents=True,exist_ok=True)
-for archive,prefix,directory,extension in [('data_tracking_image_2.zip','training/image_02/0011/','images','.png'),('data_tracking_velodyne.zip','training/velodyne/0011/','velodyne','.bin')]:
+identity.write_text(json.dumps({'sequence':args.sequence,'source':'official KITTI tracking','frames':args.frames}))
+for archive,prefix,directory,extension in [('data_tracking_image_2.zip',f'training/image_02/{args.sequence}/','images','.png'),('data_tracking_velodyne.zip',f'training/velodyne/{args.sequence}/','velodyne','.bin')]:
  dest=OUT/directory;dest.mkdir(exist_ok=True)
- if all((dest/f'{i:06d}{extension}').exists() for i in range(200)):print(f'{directory}: cache ready',flush=True);continue
+ if all((dest/f'{i:06d}{extension}').exists() for i in range(args.frames)):print(f'{directory}: cache ready',flush=True);continue
  remote=Remote(BASE+archive)
  with zipfile.ZipFile(remote) as z:
-  infos=[z.getinfo(f'{prefix}{i:06d}{extension}') for i in range(200)]
+  infos=[z.getinfo(f'{prefix}{i:06d}{extension}') for i in range(args.frames)]
   remote.cache_frames(infos,directory)
   for info in infos:(dest/pathlib.Path(info.filename).name).write_bytes(z.read(info))
- print(f'{directory}: verified ZIP CRC, 200 frames extracted',flush=True)
+ print(f'{directory}: verified ZIP CRC, {args.frames} frames extracted',flush=True)
 for archive,prefix,directory in [('data_tracking_oxts.zip','training/oxts/','oxts'),('data_tracking_calib.zip','training/calib/','calib'),('data_tracking_label_2.zip','training/label_02/','labels')]:
- dest=OUT/directory;dest.mkdir(exist_ok=True);target=dest/'0011.txt'
+ dest=OUT/directory;dest.mkdir(exist_ok=True);target=dest/f'{args.sequence}.txt'
  if target.exists():continue
  with urllib.request.urlopen(BASE+archive,timeout=90) as r:body=r.read()
- with zipfile.ZipFile(io.BytesIO(body)) as z:target.write_bytes(z.read(prefix+'0011.txt'))
-print('Official tracking 0011 source complete',flush=True)
+ with zipfile.ZipFile(io.BytesIO(body)) as z:target.write_bytes(z.read(prefix+f'{args.sequence}.txt'))
+print(f'Official tracking {args.sequence} source complete',flush=True)
