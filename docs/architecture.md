@@ -108,3 +108,5 @@ QA 是文档整体的 pending/pass/reject 状态；编辑使其失效，撤销�
 Potree 使用内置 UNCOMPRESSED 解码器和 HTTP Range 读取，不加载上游 Potree viewer。选择保留加性祖先样本并按视锥、投影密度和预算细化；默认上限 480,000 点。细节见 [Potree 渲染](potree-rendering.md)。
 
 当前正式数据适配器为 KITTI tracking。核心保留模型辅助适配接口，UI 中的模拟预标注和合成候选生成器已移除，尚未接入训练模型。其他数据集、协作后端和性能承诺都需要独立实现与验证。
+
+多数据源需要的时间、传感器和共享 Python 管线演进见 [接入设计（待实现）](multi-dataset-design.md)。
