@@ -184,11 +184,11 @@ export interface VerticesProjection {
 
 const tmpA = new Float64Array(16);
 const tmpB = new Float64Array(16);
-const worldToCam = new Float64Array(16);
 const tmpPoint: Vec3 = { x: 0, y: 0, z: 0 };
 
 export class CameraProjector {
   private cachedFrame = -1;
+  private readonly worldToCam = new Float64Array(16);
 
   constructor(
     readonly config: CameraConfig,
@@ -206,22 +206,22 @@ export class CameraProjector {
     mat4Invert(camToEgo, tmpA); // ego -> camera
     if (this.ego) {
       mat4Invert(this.ego.poseAt(frame), tmpB); // world -> ego
-      mat4Multiply(tmpA, tmpB, worldToCam); // world -> camera
+      mat4Multiply(tmpA, tmpB, this.worldToCam); // world -> camera
     } else {
-      worldToCam.set(tmpA);
+      this.worldToCam.set(tmpA);
     }
     this.cachedFrame = frame;
   }
 
   worldToCamera(world: Vec3, frame: number): Vec3 {
     this.ensureFrame(frame);
-    transformPoint(worldToCam, world, tmpPoint);
+    transformPoint(this.worldToCam, world, tmpPoint);
     return { x: tmpPoint.x, y: tmpPoint.y, z: tmpPoint.z };
   }
 
   projectPoint(world: Vec3, frame: number): PixelPoint & { depth: number } {
     this.ensureFrame(frame);
-    transformPoint(worldToCam, world, tmpPoint);
+    transformPoint(this.worldToCam, world, tmpPoint);
     const px = this.model.project(tmpPoint);
     return { ...px, depth: tmpPoint.z };
   }
@@ -236,7 +236,7 @@ export class CameraProjector {
     let visible = false;
     let minDepth = Infinity;
     for (let i = 0; i < 8; i++) {
-      transformPoint(worldToCam, { x: corners[i * 3], y: corners[i * 3 + 1], z: corners[i * 3 + 2] }, tmpPoint);
+      transformPoint(this.worldToCam, { x: corners[i * 3], y: corners[i * 3 + 1], z: corners[i * 3 + 2] }, tmpPoint);
       const cam = { x: tmpPoint.x, y: tmpPoint.y, z: tmpPoint.z };
       if (cam.z > 0) visible = true;
       cornerDepths.push(cam.z);
@@ -254,7 +254,7 @@ export class CameraProjector {
     const pixels: number[] = [];
     const valid: boolean[] = [];
     for (let i = 0; i < n; i++) {
-      transformPoint(worldToCam, { x: vertices[i * 3], y: vertices[i * 3 + 1], z: vertices[i * 3 + 2] }, tmpPoint);
+      transformPoint(this.worldToCam, { x: vertices[i * 3], y: vertices[i * 3 + 1], z: vertices[i * 3 + 2] }, tmpPoint);
       const px = this.model.project(tmpPoint);
       pixels.push(px.x, px.y);
       valid.push(px.valid);

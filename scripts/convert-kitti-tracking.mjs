@@ -165,9 +165,9 @@ const rawImuToVelo = parseCalib(join(workDir, 'calib_date/2011_09_26/calib_imu_t
 
 function mat3ToMat4(r9) {
   return [
-    r9[0], r9[1], r9[2], 0,
-    r9[3], r9[4], r9[5], 0,
-    r9[6], r9[7], r9[8], 0,
+    r9[0], r9[3], r9[6], 0,
+    r9[1], r9[4], r9[7], 0,
+    r9[2], r9[5], r9[8], 0,
     0, 0, 0, 1,
   ];
 }
@@ -308,8 +308,8 @@ for (const [, entries] of [...trackFrames.entries()].sort((a, b) => a[0] - b[0])
     // KITTI location y is the BOTTOM face center (cam y points down)
     const centerCam = [e.x, e.y - e.h / 2, e.z];
     const [cx, cy, cz] = applyMat(transform, ...centerCam);
-    // heading direction: cam-frame forward for rot_y
-    const dirCam = [Math.sin(e.ry), 0, Math.cos(e.ry)];
+    // KITTI length axis: camera X rotated around camera Y
+    const dirCam = [Math.cos(e.ry), 0, -Math.sin(e.ry)];
     const d0 = transform[0] * dirCam[0] + transform[4] * dirCam[1] + transform[8] * dirCam[2];
     const d1 = transform[1] * dirCam[0] + transform[5] * dirCam[1] + transform[9] * dirCam[2];
     const d2 = transform[2] * dirCam[0] + transform[6] * dirCam[1] + transform[10] * dirCam[2];

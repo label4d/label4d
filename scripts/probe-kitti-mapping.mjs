@@ -79,7 +79,7 @@ function inBoxScore(boxes) {
     const velo = apply(veloFromRect.R, veloFromRect.t, [box.x, box.y - box.h / 2, box.z]);
     const yaw = (() => {
       // rotate heading dir rect->velo; velo frame: x fwd, y left, z up
-      const d = [Math.sin(box.ry), 0, Math.cos(box.ry)];
+      const d = [Math.cos(box.ry), 0, -Math.sin(box.ry)];
       const dv = apply(veloFromRect.R, [0, 0, 0], d);
       return Math.atan2(dv[1], dv[0]);
     })();
@@ -133,7 +133,7 @@ for (const seq of candidates) {
     let total = 0;
     for (const box of boxes) {
       const velo = apply(veloFromRect.R, veloFromRect.t, [box.x, box.y - box.h / 2, box.z]);
-      const d = [Math.sin(box.ry), 0, Math.cos(box.ry)];
+      const d = [Math.cos(box.ry), 0, -Math.sin(box.ry)];
       const dv = apply(veloFromRect.R, [0, 0, 0], d);
       const yaw = Math.atan2(dv[1], dv[0]);
       const c = Math.cos(yaw), s = Math.sin(yaw);

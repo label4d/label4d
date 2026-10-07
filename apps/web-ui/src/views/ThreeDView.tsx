@@ -24,6 +24,7 @@ export function ThreeDView() {
   const densityRef = useRef(2);
   const [pointSize, setPointSize] = useState(CLOUD_POINT_SIZE);
   const pointSizeRef = useRef(CLOUD_POINT_SIZE);
+  const [potreePoints, setPotreePoints] = useState(0);
   const [potree, setPotree] = useState(true); // 默认开启拼接点云
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export function ThreeDView() {
     if (!canvas || !wrap) return;
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    setPotreePoints(0);
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0c141c);
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
@@ -391,6 +393,10 @@ export function ThreeDView() {
       if (potreeTick % 20 === 0) {
         void overlay?.ensureAround(controls.target.x, controls.target.z, 130);
       }
+      if (potreeTick % 20 === 0) {
+        const count = [...potreeChunks.values()].reduce((sum, e) => sum + (e.points.visible ? e.points.geometry.drawRange.count : 0), 0);
+        setPotreePoints((old) => old === count ? old : count);
+      }
       renderer.render(scene, camera);
       rafId = requestAnimationFrame(renderLoop);
     };
@@ -477,7 +483,8 @@ export function ThreeDView() {
       <label>
         <input
           type="checkbox"
-          checked={potree}
+          checked={Boolean(session.manifest?.potree) && potree}
+          disabled={!session.manifest?.potree}
           onChange={(e) => {
             setPotree(e.target.checked);
             window.dispatchEvent(new CustomEvent('lf:potree', { detail: e.target.checked }));
@@ -485,6 +492,8 @@ export function ThreeDView() {
         />
         静态点云(Potree)
       </label>
+      <span role="status" aria-label="Potree 加载状态">{!session.manifest?.potree ? '未配置 Potree' : !potree ? 'Potree 已关闭' : potreePoints ? `Potree 已显示 ${potreePoints.toLocaleString()} 点` : 'Potree 加载中…'}</span>
+      <span className="text-slate-400">动态点云：当前帧 · 绿色路径：自车轨迹</span>
       </div></details>
     </div>
   );

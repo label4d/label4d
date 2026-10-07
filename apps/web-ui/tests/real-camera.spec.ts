@@ -3,9 +3,10 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 test('real camera preview loads same-frame images and survives seeking and focus remount', async ({ page }) => {
-  test.skip(!existsSync(fileURLToPath(new URL('../public/kitti-camera/manifest.json', import.meta.url))), 'Run pnpm fixtures:camera-preview with local R-mini assets');
+  test.skip(!existsSync(fileURLToPath(new URL('../public/kitti-camera/manifest.json', import.meta.url))), 'Run pnpm fixtures:camera-preview to generate official tracking assets');
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
+  const tree = page.waitForResponse((r) => r.url().endsWith('/kitti-camera/potree/octree.bin') && r.status() === 206);
   const image0 = page.waitForResponse((r) => r.url().endsWith('/kitti-camera/images/0.png'));
   await page.goto('/?manifest=/kitti-camera/manifest.json');
   const response = await image0;
@@ -14,6 +15,10 @@ test('real camera preview loads same-frame images and survives seeking and focus
   expect(png.readUInt32BE(16)).toBe(1242); expect(png.readUInt32BE(20)).toBe(375);
   await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存');
   await expect(page.getByLabel('选择相机 1')).toHaveValue('cam2');
+  expect((await tree).status()).toBe(206);
+  await page.getByText('点云显示', { exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Potree 加载状态' })).toContainText('Potree 已显示');
+  await page.getByText('点云显示', { exact: true }).click();
   await expect(page.locator('.camera-empty')).toHaveCount(0);
   await expect(page.locator('.camera-demo-label')).toHaveCount(0);
   await expect(page.getByLabel('点云投影', { exact: true })).not.toBeChecked();
@@ -32,6 +37,16 @@ test('real camera preview loads same-frame images and survives seeking and focus
   await page.getByRole('button', { name: '退出专注视图', exact: true }).click();
   await expect(page.getByLabel('选择相机 1')).toHaveValue('cam2');
   await expect(page.locator('.camera-empty')).toHaveCount(0);
+  if (!await page.getByRole('complementary', { name: '对象与属性' }).isVisible()) await page.getByRole('button', { name: '切换属性面板' }).click();
+  await page.locator('.object-select').first().click();
+  await expect(page.getByLabel('x', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/real-camera-workspace.png' });
+  await page.getByLabel('跳转到帧', { exact: true }).fill('100');
+  await page.getByLabel('跳转到帧', { exact: true }).press('Enter');
+  await expect.poll(async () => (await page.evaluate(async () => {
+    const p = (window as unknown as { __LABELFASTER_TEST__: { read: () => Promise<{ frame: { presented: number; status: string } }> } }).__LABELFASTER_TEST__;
+    return (await p.read()).frame.presented;
+  }))).toBe(100);
+  await page.screenshot({ path: 'test-results/real-camera-frame100.png' });
   expect(errors).toEqual([]);
 });

@@ -13,6 +13,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { camera2Config, AXIS_MAP } from './kitti-calibration.mjs';
 
 const SRC = '/tmp/kitti4d';
 const ZIP = join(SRC, 'raw_drive.zip');
@@ -93,18 +94,17 @@ const veloToImu = inv(mat34(iv.R, iv.T));
 // oxts -> ENU poses (Z-up world, ego = imu)
 const oxtsDir = join(SRC, drive, 'oxts/data');
 const files = readdirSync(oxtsDir).sort().slice(0, FRAMES);
-const er = 6378137, ep = 6356752.3142, ecc = Math.sqrt(er*er - ep*ep) / er;
+const er = 6378137; // KITTI devkit spherical Mercator radius
 const rows = files.map((f) => readFileSync(join(oxtsDir, f), 'utf8').trim().split(/\s+/).map(Number));
 const scale = Math.cos((rows[0][0] * Math.PI) / 180);
 let x0 = 0, y0 = 0, z0 = 0;
 const poses = rows.map((r, i) => {
   const [lat, lon, alt, roll, pitch, yaw] = r;
   const latR = (lat * Math.PI) / 180, lonR = (lon * Math.PI) / 180;
-  const rm = er / Math.sqrt(1 - ecc * ecc * Math.sin(latR) ** 2);
-  const x = rm * scale * lonR, y = rm * Math.log(Math.tan(Math.PI / 4 + latR / 2)), z = alt;
+  const x = er * scale * lonR, y = er * scale * Math.log(Math.tan(Math.PI / 4 + latR / 2)), z = alt;
   if (i === 0) { x0 = x; y0 = y; z0 = z; }
-  const d2r = Math.PI / 180;
-  const cr = Math.cos(roll*d2r), sr = Math.sin(roll*d2r), cp = Math.cos(pitch*d2r), sp = Math.sin(pitch*d2r), cy = Math.cos(yaw*d2r), sy = Math.sin(yaw*d2r);
+  // OXTS orientation is already radians.
+  const cr = Math.cos(roll), sr = Math.sin(roll), cp = Math.cos(pitch), sp = Math.sin(pitch), cy = Math.cos(yaw), sy = Math.sin(yaw);
   const R = [cy*cp, cy*sp*sr - sy*cr, cy*sp*cr + sy*sr, sy*cp, sy*sp*sr + cy*cr, sy*sp*cr - cy*sr, -sp, cp*sr, cp*cr];
   const pose = new Array(16).fill(0);
   for (let rr = 0; rr < 3; rr++) for (let cc = 0; cc < 3; cc++) pose[cc*4+rr] = R[rr*3+cc];
@@ -113,12 +113,11 @@ const poses = rows.map((r, i) => {
 });
 const veloToWorld = (f) => mul(poses[f], veloToImu);
 
-// P2 intrinsics + cam2 rectified chain: x_img2 = P2 · R_rect_02 · x_velo (velo = velodyne frame)
+// Rectified cam2: P_rect_02 · R_rect_00 · T_cam0_from_velo, including baseline
 const tcal = parseCalib(join(SRC, 'calib/training/calib/0011.txt'));
 const P2 = tcal.P2;
-const R_rect_02 = calib.R_rect_02;
-const cam2RectFromVelo = mul(mat34(R_rect_02, [0, 0, 0]), mat34(vc.R, vc.T));
-const T_ego_from_cam2 = mul(veloToImu, inv(cam2RectFromVelo));
+const cam2 = camera2Config(calib, vc, iv);
+const T_ego_from_cam2 = mul(inv(AXIS_MAP), cam2.cameraToEgo);
 mkdirSync(join(OUT, 'pcd'), { recursive: true });
 mkdirSync(join(OUT, 'images'), { recursive: true });
 
@@ -129,6 +128,10 @@ const veloDir = join(SRC, drive, 'velodyne_points/data');
 const bins = readdirSync(veloDir).filter((f) => f.endsWith('.bin')).sort();
 const imgDir = join(SRC, drive, 'image_02/data');
 const imgs = readdirSync(imgDir).filter((f) => f.endsWith('.png')).sort();
+const expectedImage = JSON.parse(readFileSync('fixtures/calibration/2011_09_26/tracking-reference.json', 'utf8')).images.find(i => i.frame === 0).sha256;
+if (sha(readFileSync(join(imgDir, imgs[0]))) !== expectedImage) {
+  throw new Error('Source mismatch: raw drive 0084 is not tracking 0011. Use pnpm fixtures:camera-preview with official tracking sources; never attach these labels to another drive.');
+}
 
 for (let f = 0; f < FRAMES; f++) {
   const bin = readFileSync(join(veloDir, bins[f]));
@@ -168,7 +171,7 @@ for (const line of readFileSync(join(SRC, 'labels/training/label_02/0011.txt'), 
   if (frame >= FRAMES || ['DontCare', 'Misc'].includes(p[2])) continue;
   const h = +p[10], x = +p[13], y = +p[14] - h / 2, z = +p[15], ry = +p[16];
   const center = apply(camRectToImu, x, y, z);
-  const d = [Math.sin(ry), 0, Math.cos(ry)];
+  const d = [Math.cos(ry), 0, -Math.sin(ry)];
   const dir = apply(camRectToImu, d[0], d[1], d[2]);
   const id = `kitti_${p[1].padStart(5, '0')}`;
   if (!referenceTracks.has(id)) referenceTracks.set(id, { id, label: p[2], frames: [] });
@@ -231,12 +234,12 @@ const manifest = {
     { sensorId: 'lidar', type: 'lidar', model: 'none', distortionState: 'raw', T_ego_from_sensor: veloToImu,
       timeSync: { toleranceUs: 5000, fallback: 'none' }, pcdTemplate: 'pcd/{frame}.pcd',
       pointCloud: { fields: ['x','y','z','intensity'], encoding: 'binary-pcd', bytesPerPoint: 16, motionDistorted: false, referenceTime: 'mid' } },
-    { sensorId: 'cam2', type: 'camera', model: 'pinhole', distortionState: 'raw',
-      distortion: [], intrinsics: { fx: P2[0], fy: P2[5], cx: P2[2], cy: P2[6] },
+    { sensorId: 'cam2', type: 'camera', model: 'pinhole', distortionState: 'rectified',
+      distortion: [], intrinsics: cam2.intrinsics,
       width: 1242, height: 375,
       T_ego_from_sensor: T_ego_from_cam2,
       timeSync: { toleranceUs: 5000, fallback: 'none' }, imageTemplate: 'images/{frame}.png',
-      notes: 'sensor frame = rectified cam2; chain velo -> cam2rect via R_rect_02/Tr (raw image, distortion NOT reapplied on undistorted-less pipeline)' },
+      notes: 'rectified cam2; P_rect_02 baseline + R_rect_00 + velo-to-cam0, no distortion reapplied' },
   ],
   bev: {
     tileset: { originX: BEV.originX, originY: BEV.originY, metersPerPixel: BEV.mpp, width: BEV.size, height: BEV.size, tileSize: BEV.size, urlTemplate: 'bev/0/0/0.bmp', pixelCenter: 'top-left-center', axisNote: 'image +x -> world +x, image +y -> world +y; rasterized from the same lidar frames' },

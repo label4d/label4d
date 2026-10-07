@@ -22,3 +22,6 @@ apps/web-ui/playwright-report/
 
 # Generated real camera preview (pnpm fixtures:camera-preview)
 apps/web-ui/public/kitti-camera/
+
+# Official tracking source cache, downloaded by byte range
+fixtures/kitti-tracking-source/
