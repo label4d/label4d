@@ -31,7 +31,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           if (!active) return;
           const snapshotUrl = new URL('snapshot.json', new URL(manifestUrl, window.location.href)).href;
           const snapshot = await fetch(snapshotUrl);
-          if (snapshot.ok && active) next.importSnapshot(await snapshot.json());
+          if (snapshot.ok && snapshot.headers.get('content-type')?.includes('application/json') && active) next.importSnapshot(await snapshot.json());
         } else {
           await next.loadManifest(buildDemoManifest());
           if (!active) return;

@@ -1,0 +1,37 @@
+import { test, expect } from '@playwright/test';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+test('real camera preview loads same-frame images and survives seeking and focus remount', async ({ page }) => {
+  test.skip(!existsSync(fileURLToPath(new URL('../public/kitti-camera/manifest.json', import.meta.url))), 'Run pnpm fixtures:camera-preview with local R-mini assets');
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  const image0 = page.waitForResponse((r) => r.url().endsWith('/kitti-camera/images/0.png'));
+  await page.goto('/?manifest=/kitti-camera/manifest.json');
+  const response = await image0;
+  expect(response.status()).toBe(200);
+  const png = await response.body();
+  expect(png.readUInt32BE(16)).toBe(1242); expect(png.readUInt32BE(20)).toBe(375);
+  await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存');
+  await expect(page.getByLabel('选择相机 1')).toHaveValue('cam2');
+  await expect(page.locator('.camera-empty')).toHaveCount(0);
+  await expect(page.locator('.camera-demo-label')).toHaveCount(0);
+  await expect(page.getByLabel('点云投影', { exact: true })).not.toBeChecked();
+  await page.getByLabel('点云投影', { exact: true }).check();
+  await expect(page.getByLabel('点云投影', { exact: true })).toBeChecked();
+  await page.getByLabel('点云投影', { exact: true }).uncheck();
+  const image12 = page.waitForResponse((r) => r.url().endsWith('/kitti-camera/images/12.png'));
+  await page.getByLabel('跳转到帧', { exact: true }).fill('12');
+  await page.getByLabel('跳转到帧', { exact: true }).press('Enter');
+  expect((await image12).status()).toBe(200);
+  await expect.poll(async () => (await page.evaluate(async () => {
+    const p = (window as unknown as { __LABELFASTER_TEST__: { read: () => Promise<{ frame: { presented: number; status: string } }> } }).__LABELFASTER_TEST__;
+    return (await p.read()).frame;
+  }))).toEqual({ requested: 12, presented: 12, status: 'ready' });
+  await page.getByRole('button', { name: '专注主视图', exact: true }).click();
+  await page.getByRole('button', { name: '退出专注视图', exact: true }).click();
+  await expect(page.getByLabel('选择相机 1')).toHaveValue('cam2');
+  await expect(page.locator('.camera-empty')).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/real-camera-workspace.png' });
+  expect(errors).toEqual([]);
+});

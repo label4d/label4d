@@ -19,3 +19,6 @@ third_party/PotreeConverter/
 
 apps/web-ui/test-results/
 apps/web-ui/playwright-report/
+
+# Generated real camera preview (pnpm fixtures:camera-preview)
+apps/web-ui/public/kitti-camera/

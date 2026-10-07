@@ -37,6 +37,10 @@ export function Toolbar({ onToggleInspector, inspectorOpen }: { onToggleInspecto
         </select>
       </label>
       <Dropdown label="文件与导出" className="file-dropdown">
+        <div className="menu-heading">打开序列</div>
+        <a className="menu-action" href="?manifest=/kitti-camera/manifest.json"><FolderOpen size={16} /><span>KITTI 真实相机序列<small>200 帧照片与同帧点云 · 需准备本地数据</small></span></a>
+        <a className="menu-action" href="/"><FolderOpen size={16} /><span>合成演示序列<small>生成的点云与道路示意图</small></span></a>
+        <div className="menu-divider" />
         <div className="menu-heading">序列文件</div>
         <button className="menu-action" disabled={!session.canEdit} onClick={() => fileRef.current?.click()}><Upload size={16} /><span>导入快照<small>替换当前序列的标注</small></span></button>
         <button className="menu-action" disabled={loading} onClick={() => download(session.exportSnapshot(), `${session.manifest?.id ?? 'sequence'}.snapshot.json`)}><Download size={16} /><span>导出快照<small>当前已提交的标注内容</small></span></button>

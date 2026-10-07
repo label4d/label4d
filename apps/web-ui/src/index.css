@@ -298,3 +298,5 @@ select { min-width: 0; border: 1px solid var(--border); border-radius: 4px; padd
 .object-collapse { height: 22px; width: 22px; }
 .object-rows { max-height: 109px; }
 @media (max-height: 650px) { .rail-tool { height: 38px; } .rail-tools { gap: 2px; } .tool-rail { gap: 8px; overflow-y: auto; } .rail-history { gap: 1px; padding-top: 5px; } .rail-help { margin-top: 0; } }
+
+.camera-demo-label { position: absolute; left: 10px; bottom: 9px; color: var(--text-secondary); background: #121c26dd; padding: 3px 6px; border-radius: 3px; font-size: 10px; pointer-events: none; }
