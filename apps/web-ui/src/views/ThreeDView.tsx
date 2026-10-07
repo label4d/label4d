@@ -6,6 +6,7 @@ import {
   AttributeBadgeRenderer,
   createCloudShaderMaterial,
   CLOUD_POINT_SIZE,
+  EgoCameraFollow,
   stablePointOrder,
   PointCloudFrameView,
   TrackInstanceRenderer,
@@ -234,8 +235,23 @@ export function ThreeDView() {
     window.addEventListener('lf:potree', onPotreeToggle);
 
     let followEnabled = follow;
+    controls.enableDamping = !followEnabled;
+    let orbiting = false;
+    const cameraFollow = new EgoCameraFollow();
+    const captureFollow = () => cameraFollow.capture(session.ego.poseAt(session.frame), camera, controls.target);
+    const onOrbitStart = () => { orbiting = true; };
+    const onOrbitChange = () => { if (followEnabled && orbiting) captureFollow(); };
+    const onOrbitEnd = () => { if (followEnabled) captureFollow(); orbiting = false; };
+    controls.addEventListener('start', onOrbitStart);
+    controls.addEventListener('change', onOrbitChange);
+    controls.addEventListener('end', onOrbitEnd);
     const onFollow = (e: Event) => {
       followEnabled = Boolean((e as CustomEvent).detail);
+      // Damping would continue changing the relative pose after the user releases the mouse.
+      controls.enableDamping = !followEnabled;
+      controls.update();
+      if (followEnabled) captureFollow();
+      else camera.up.set(0, 1, 0);
     };
     window.addEventListener('lf:follow', onFollow);
 
@@ -245,6 +261,7 @@ export function ThreeDView() {
       controls.target.set(ego.x, 0, ego.z);
       camera.position.set(ego.x + 30, ego.y + 35, ego.z + 30);
       controls.update();
+      if (followEnabled) captureFollow();
     };
     recenter();
     const offManifest = session.events.on('manifestLoaded', recenter);
@@ -299,10 +316,14 @@ export function ThreeDView() {
 
       // Camera-space LOD selection; cached nodes are not automatically visible.
       if (followEnabled) {
-        const ego = session.ego.positionAt(frame);
-        controls.target.set(ego.x, 0, ego.z);
+        cameraFollow.apply(session.ego.poseAt(frame), camera, controls.target);
+        if (orbiting) controls.update();
+      } else {
+        controls.update();
       }
-      controls.update();
+      if (import.meta.env.MODE === 'test') {
+        wrap.dataset.camera = JSON.stringify({ frame, position: camera.position.toArray(), quaternion: camera.quaternion.toArray(), target: controls.target.toArray() });
+      }
       if (potreeEnabled && session.potree && potreeTick++ % 6 === 0) {
         const source = session.potree;
         const targetSpacingPixels = 3 / densityRef.current;
@@ -411,6 +432,9 @@ export function ThreeDView() {
       window.removeEventListener('lf:badges', onBadgeToggle);
       window.removeEventListener('lf:potree', onPotreeToggle);
       window.removeEventListener('lf:follow', onFollow);
+      controls.removeEventListener('start', onOrbitStart);
+      controls.removeEventListener('change', onOrbitChange);
+      controls.removeEventListener('end', onOrbitEnd);
       offManifest();
       offEgo();
       offOverlay();
@@ -435,7 +459,7 @@ export function ThreeDView() {
   }, [session, session.manifest]);
 
   return (
-    <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">
+    <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden" data-testid="cloud-view">
       <canvas ref={canvasRef} className="block h-full w-full" />
       <details className="cloud-view-settings"><summary><SlidersHorizontal size={13} />点云显示</summary><div className="cloud-settings-content">
       <label>

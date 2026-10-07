@@ -114,6 +114,7 @@ export type { CloudShaderOptions } from './render/cloudShader';
 export { EditorSession } from './session/EditorSession';
 export type { SessionEvents, SessionDeps } from './session/EditorSession';
 export { WorldCloudOverlay } from './render/WorldCloudOverlay';
+export { EgoCameraFollow } from './render/EgoCameraFollow';
 export type { WorldCloudIndex } from './render/WorldCloudOverlay';
 
 export { selectPotreeNodes, stablePointOrder } from './stream/PotreeSelection';
