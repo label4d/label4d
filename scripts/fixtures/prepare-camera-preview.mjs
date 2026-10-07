@@ -11,6 +11,7 @@ function run(command,args) {
 }
 run('python3',['scripts/fixtures/fetch-tracking-source.py']);
 run('uv',['run','--project','tools/py','python','scripts/fixtures/build-tracking-preview.py']);
+run('uv',['run','--project','tools/py','python','scripts/fixtures/build-tracking-bev.py']);
 const converter=process.env.LABELFASTER_POTREE_CONVERTER ?? join(root,'third_party/PotreeConverter/build/PotreeConverter');
 if(!existsSync(converter)) throw new Error('Build PotreeConverter using third_party/POTREE_BUILD.md or set LABELFASTER_POTREE_CONVERTER');
 const las=join(root,'fixtures/kitti-tracking-source/static-preview/world.las');

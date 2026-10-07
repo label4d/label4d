@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
   AttributeBadgeRenderer,
@@ -17,7 +17,7 @@ import { demoFetchImage } from '../lib/demo';
 function loadImage(url: string): Promise<ImageBitmap | HTMLImageElement> {
   if (url.startsWith('demo://')) return demoFetchImage(url);
   return fetch(url)
-    .then((r) => r.blob())
+    .then((r) => { if (!r.ok) throw new Error(`BEV HTTP ${r.status}`); return r.blob(); })
     .then((blob) => createImageBitmap(blob, { imageOrientation: 'flipY' }));
 }
 
@@ -26,6 +26,12 @@ export function BevView() {
   const session = useSession();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const [mapStatus, setMapStatus] = useState('未配置底图');
+  const [showCloud, setShowCloud] = useState(true);
+  const showCloudRef = useRef(true);
+  const [follow, setFollow] = useState(true);
+  const followRef = useRef(true);
+  const centerRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -33,6 +39,7 @@ export function BevView() {
     if (!canvas || !wrap) return;
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    let disposed = false;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0e13);
     scene.add(new THREE.AmbientLight(0xffffff, 0.9));
@@ -61,17 +68,21 @@ export function BevView() {
     scene.add(badges.group);
 
     let bevTiles: BevTileRenderer | null = null;
+    setMapStatus(session.bevPyramid ? '底图加载中…' : '未配置底图');
     const ensureTiles = () => {
       if (bevTiles || !session.bevPyramid) return;
       bevTiles = new BevTileRenderer(session.bevPyramid, session.scheduler, loadImage);
       scene.add(bevTiles.group);
-      void bevTiles.loadOverview();
+      setMapStatus('底图加载中…');
+      void bevTiles.loadOverview().then((ready) => {
+        if (!disposed) setMapStatus(ready ? '底图已加载' : '底图加载失败');
+      });
     };
     ensureTiles();
     const offTiles = session.events.on('manifestLoaded', ensureTiles);
 
     // ---- ego trajectory (clickable per-frame dots) ----
-    const egoLine = makeDynamicLines(16384, { color: 0x3ddc97, opacity: 0.9 });
+    const egoLine = makeDynamicLines(16384, { color: 0x3ddc97, opacity: 0.9, depthTest: false });
     scene.add(egoLine.object);
     let egoDots: THREE.Points | null = null;
     const rebuildEgo = () => {
@@ -103,21 +114,29 @@ export function BevView() {
       geometry.setAttribute('position', new THREE.BufferAttribute(dotPositions, 3));
       egoDots = new THREE.Points(
         geometry,
-        new THREE.PointsMaterial({ size: 0.45, color: 0x3ddc97, sizeAttenuation: true })
+        new THREE.PointsMaterial({ size: 3, color: 0x3ddc97, sizeAttenuation: false, depthTest: false, depthWrite: false })
       );
       scene.add(egoDots);
+      egoDots.renderOrder = 2;
     };
     rebuildEgo();
     const offManifest = session.events.on('manifestLoaded', rebuildEgo);
+    const markerGeometry = new THREE.RingGeometry(0.7, 1.05, 32);
+    markerGeometry.rotateX(-Math.PI / 2);
+    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0x4dffce, depthTest: false, depthWrite: false });
+    const egoMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+    egoMarker.renderOrder = 3;
+    scene.add(egoMarker);
 
     // center the ground view on the ego vehicle when a manifest arrives
     const centerOnEgo = () => {
       const ego = session.ego.positionAt(session.frame);
       view.cx = ego.x;
       view.cz = ego.z;
-      view.halfExtent = 60;
+      view.halfExtent = 32;
       applyCamera();
     };
+    centerRef.current = centerOnEgo;
     centerOnEgo();
     const offManifestCenter = session.events.on('manifestLoaded', centerOnEgo);
 
@@ -222,11 +241,11 @@ export function BevView() {
       const aspect = rect2.width / Math.max(1, rect2.height);
       const wppX = (2 * view.halfExtent * aspect) / rect2.width;
       const wppY = (2 * view.halfExtent) / rect2.height;
-      const minX = view.cx + (rect.x0 - rect2.width / 2) * wppX;
-      const maxX = view.cx + (rect.x1 - rect2.width / 2) * wppX;
-      // screen up = -Z
-      const minZ = view.cz - (rect.y1 - rect2.height / 2) * wppY;
-      const maxZ = view.cz - (rect.y0 - rect2.height / 2) * wppY;
+      const minX = view.cx + (Math.min(rect.x0, rect.x1) - rect2.width / 2) * wppX;
+      const maxX = view.cx + (Math.max(rect.x0, rect.x1) - rect2.width / 2) * wppX;
+      // Camera up = -Z, so screen down = +Z, exactly like the rendered image.
+      const minZ = view.cz + (Math.min(rect.y0, rect.y1) - rect2.height / 2) * wppY;
+      const maxZ = view.cz + (Math.max(rect.y0, rect.y1) - rect2.height / 2) * wppY;
       const ids: string[] = [];
       for (const id of session.store.activeTrackIds(session.frame)) {
         const state = session.store.resolveState(id, session.frame);
@@ -251,6 +270,8 @@ export function BevView() {
     // 屏幕像素 -> 世界米平移（正交视口随 halfExtent/纵横比变化）。
     // top 视图屏幕右=+X、屏幕下=+Z；内容跟手 = 相机反向移动
     const panView = (dx: number, dy: number) => {
+      followRef.current = false;
+      setFollow(false);
       const rect = canvas.getBoundingClientRect();
       const aspect = rect.width / Math.max(1, rect.height);
       view.cx -= dx * ((2 * view.halfExtent * aspect) / rect.width);
@@ -366,6 +387,8 @@ export function BevView() {
       }
       // select tool: double-click re-centers the view on that point
       const g = toGesture(e);
+      followRef.current = false;
+      setFollow(false);
       view.cx = g.world.x;
       view.cz = g.world.z;
       applyCamera();
@@ -442,10 +465,42 @@ export function BevView() {
     observer.observe(wrap);
 
     const tmpPreviewBuf = new Float32Array(2048 * 3);
+    // Project only the presented frame into XZ; never show stale-frame cloud over new boxes.
+    const cloudMaterial = new THREE.PointsMaterial({ color: 0xe7c66a, size: 1.5, sizeAttenuation: false, depthTest: false, depthWrite: false });
+    const cloudPoints = new THREE.Points(new THREE.BufferGeometry(), cloudMaterial);
+    cloudPoints.renderOrder = -10;
+    scene.add(cloudPoints);
+    let lastCloud: ReturnType<typeof session.currentPointCloud> = null;
+    let lastFrame = -1;
     const renderLoop = () => {
+      const frame = session.frame;
+      if (frame !== lastFrame && followRef.current) {
+        const ego = session.ego.positionAt(frame);
+        view.cx = ego.x;
+        view.cz = ego.z;
+      }
+      lastFrame = frame;
+      const egoPosition = session.ego.positionAt(frame);
+      egoMarker.position.set(egoPosition.x, 0.12, egoPosition.z);
       // 视图状态（cx/cz/halfExtent）可能被平移/缩放/双击随时修改，每帧统一同步相机
       applyCamera();
-      const frame = session.frame;
+      const cloud = session.currentPointCloud();
+      if (cloud !== lastCloud) {
+        lastCloud = cloud;
+        const positions = new Float32Array((cloud?.count ?? 0) * 3);
+        for (let i = 0; cloud && i < cloud.count; i++) {
+          positions[i * 3] = cloud.positions[i * 3];
+          positions[i * 3 + 1] = 0.02;
+          positions[i * 3 + 2] = cloud.positions[i * 3 + 2];
+        }
+        cloudPoints.geometry.dispose();
+        cloudPoints.geometry = new THREE.BufferGeometry();
+        cloudPoints.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        cloudPoints.geometry.computeBoundingSphere();
+      }
+      cloudPoints.visible = showCloudRef.current;
+      wrap.dataset.cloudFrame = String(frame);
+      wrap.dataset.cloudPoints = String(cloud?.count ?? 0);
       wrap.dataset.bev = `${view.cx.toFixed(1)},${view.cz.toFixed(1)},${view.halfExtent.toFixed(0)}`;
       // 诊断：画布中心的射线拾取结果
       {
@@ -564,6 +619,8 @@ export function BevView() {
     renderLoop();
 
     return () => {
+      disposed = true;
+      centerRef.current = () => {};
       cancelAnimationFrame(rafId);
       observer.disconnect();
       canvas.removeEventListener('pointercancel', cancelPointer);
@@ -590,6 +647,10 @@ export function BevView() {
       badges.dispose();
       bevTiles?.dispose();
       egoLine.dispose();
+      markerGeometry.dispose();
+      markerMaterial.dispose();
+      cloudPoints.geometry.dispose();
+      cloudMaterial.dispose();
       previewLines.dispose();
       if (egoDots) {
         egoDots.geometry.dispose();
@@ -600,8 +661,15 @@ export function BevView() {
   }, [session, session.manifest]);
 
   return (
-    <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">
+    <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden" data-testid="bev-view">
       <canvas ref={canvasRef} className="block h-full w-full" />
+      <div className="absolute left-3 top-3 flex flex-wrap items-center gap-3 rounded border border-slate-700 bg-slate-950/90 px-2 py-1 text-xs text-slate-300">
+        <span role="status" aria-label="BEV 底图状态">{mapStatus}</span>
+        <label className="flex items-center gap-1"><input type="checkbox" checked={showCloud} onChange={(e) => { showCloudRef.current = e.target.checked; setShowCloud(e.target.checked); }} />当前帧点云</label>
+        <label className="flex items-center gap-1"><input type="checkbox" checked={follow} onChange={(e) => { followRef.current = e.target.checked; setFollow(e.target.checked); if (e.target.checked) centerRef.current(); }} />跟随自车</label>
+        <button type="button" onClick={() => centerRef.current()}>定位自车</button>
+      </div>
+      <div className="pointer-events-none absolute bottom-2 left-3 text-xs text-slate-400">右 +X · 下 +Z · 黄色：当前帧点云 · 绿色：自车轨迹</div>
     </div>
   );
 }

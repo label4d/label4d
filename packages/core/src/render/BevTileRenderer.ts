@@ -41,19 +41,21 @@ export class BevTileRenderer {
     private readonly loadImage: (url: string) => Promise<AnyImage>
   ) {}
 
-  async loadOverview(): Promise<void> {
-    if (this.overviewReady) return;
+  async loadOverview(): Promise<boolean> {
+    if (this.overviewReady) return true;
     const rect = this.pyramid.tileWorldRect(0, 0, 0);
     try {
       const key = `${this.prefix}overview`;
       const mesh = await this.scheduler.request(key, 80, this.pyramid.tileBytesEstimate(), () =>
         this.loadImage(this.pyramid.tileUrl(0, 0, 0)).then((image) => this.buildMesh(key, 0, rect, image)),
         { pinned: true, dispose: (mesh) => { this.group.remove(mesh); disposeMesh(mesh); }, bytes: (mesh) => this.meshBytes(mesh) });
-      if (this.disposed || !this.scheduler.isResident(key, mesh)) { this.scheduler.release(key); return; }
+      if (this.disposed || !this.scheduler.isResident(key, mesh)) { this.scheduler.release(key); return false; }
       this.group.add(mesh);
       this.overviewReady = true;
+      return true;
     } catch {
       // overview unavailable; streaming tiles still work
+      return false;
     }
   }
 
@@ -138,7 +140,8 @@ export class BevTileRenderer {
     texture.magFilter = THREE.LinearFilter;
     texture.generateMipmaps = false;
     texture.needsUpdate = true; // required: manual Texture starts at version 0
-    const material = new THREE.MeshBasicMaterial({ map: texture });
+    // A ground-plane map is a background; downhill annotations may have negative Y.
+    const material = new THREE.MeshBasicMaterial({ map: texture, depthWrite: false });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set((rect.minX + rect.maxX) / 2, -0.05 + level * 0.002, (rect.minZ + rect.maxZ) / 2);
     mesh.renderOrder = -50 + level;
