@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * verify:preflight — M1 H0 preflight.
+ * verify:preflight — historical v2 fixture and environment checks.
  * Checks: node version, workspace deps, schema validity, manifest samples
  * (valid passes / invalid rejected), fixture presence + checksums, environment.
- * Exit codes per delivery-contracts §5: 0 all-pass, 1 fail, 2 blocked, 3 runner error.
+ * Exit codes: 0 all-pass, 1 fail, 2 blocked, 3 runner error.
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';

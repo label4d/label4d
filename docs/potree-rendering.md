@@ -12,7 +12,6 @@ Keep ancestors when refining. Do not globally rank arbitrary nodes by depth.
 and box-surface distance. Stop refinement at a target projected spacing of
 1.5 CSS pixels by default (adjustable with the density slider), with a small hysteresis band. Limit the sum of draw counts to
 viewport area / target spacing squared (maximum 480,000); incremental layers also have local caps.
-The default budget is four times the initial sparse setting, without enlarging point sprites.
 Traversal and draw allocation are separate phases. A dense root must never
 consume the budget before the selector discovers zoom-dependent descendants.
 After discovering visible detail, distribute the draw budget with capped,
@@ -23,7 +22,7 @@ These are density heuristics, not a guarantee of one point per screen cell:
 overlapping surfaces and uneven source distributions can remain dense.
 
 Stable seeded permutations make geometry prefixes unbiased by source order.
-The view uses drawRange for nested sampling, fixed 2.5-CSS-pixel circular point sprites by default,
+The view uses drawRange for nested sampling, fixed 2-CSS-pixel circular point sprites by default,
 and gradual increases in displayed counts. The point-size slider adjusts both
 single-frame and Potree sprites together from 1 to 6 CSS pixels (step 0.25),
 independently of the density slider. Both layers share the same shader and

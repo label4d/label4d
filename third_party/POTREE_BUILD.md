@@ -1,47 +1,40 @@
-# PotreeConverter 构建说明（macOS arm64，无 Docker）
+# PotreeConverter 构建
 
-官方仓库已迁移至 `potree/PotreeConverter`（原 PotreeOffice 路径 404）。
+静态 Potree 地图是可选资源；当前帧 PCD 不依赖转换器。正式导入需要 **UNCOMPRESSED** 编码，浏览器不支持直接读取其他 Potree 编码。完整管线见 [数据工具](../tools/README.md)。
 
-```bash
-git clone --recursive https://github.com/PotreeOffice/PotreeConverter.git  # 若 404 用 potree/PotreeConverter
-cd PotreeConverter
-git apply ../PotreeConverter-apple.patch   # Apple 编译补丁（随本仓库提交，见下文）
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-  -DCMAKE_CXX_FLAGS="-Wno-c++11-narrowing"
-make -j8   # 产物 build/PotreeConverter
+## macOS / AppleClang
+
+需要 Xcode Command Line Tools、CMake 和 TBB。以下命令从本仓库根目录执行：
+
+```sh
+brew install cmake tbb
+git clone --recursive https://github.com/potree/PotreeConverter.git third_party/PotreeConverter
+git -C third_party/PotreeConverter apply ../PotreeConverter-apple.patch
+cmake -S third_party/PotreeConverter -B third_party/PotreeConverter/build \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -DCMAKE_CXX_FLAGS="-Wno-c++11-narrowing" \
+  -DTBB_DIR="$(brew --prefix tbb)/lib/cmake/TBB" \
+  -DCMAKE_EXE_LINKER_FLAGS="-L$(brew --prefix tbb)/lib"
+cmake --build third_party/PotreeConverter/build --parallel 8
 ```
 
-依赖：cmake ≥3.16、TBB（`brew install tbb`，若 find_package 失败加
-`-DTBB_DIR=$(brew --prefix tbb)/lib/cmake/TBB` 与 `-DCMAKE_EXE_LINKER_FLAGS="-L$(brew --prefix tbb)/lib"`）。
-GitHub 需代理时给 git/cmake 加 `https_proxy=http://127.0.0.1:7890`。
+导入器默认查找 `third_party/PotreeConverter/build/PotreeConverter`。也可传 `--potree-converter /path/to/PotreeConverter` 或设置 `LABELFASTER_POTREE_CONVERTER`。
 
-## Apple 补丁内容（PotreeConverter-apple.patch，5705 行）
+[Apple 补丁](PotreeConverter-apple.patch) 提供 Apple 文件 seek、内存/CPU 查询分支和缺失的标准库并行算法回退，同时增加 LAS 打开失败诊断。补丁按既有上游源码制作；上游更新后若无法应用，应检查差异，不要重复应用或忽略失败。转换器及子模块继续遵循各自上游许可证。
 
-上游未合并，`git apply` 一次即可：
+Linux 可按 [上游说明](https://github.com/potree/PotreeConverter) 构建，再通过参数指定二进制；这里的 Apple 构建步骤不构成 Linux 构建验证。
 
-1. `Converter/modules/unsuck/unsuck.hpp`：`fseek_64_all_platforms` 只保护了
-   Linux/Win，补 `#elif defined(__APPLE__) constexpr auto fseek_64_all_platforms = fseeko;`
-2. `Converter/modules/unsuck/unsuck_platform_specific.cpp`：无 `__APPLE__` 分支，
-   在 Linux 分支后补 Apple 实现（getMemoryData 用 sysctl+task_info，
-   getCpuData 返回 hardware_concurrency，printMemoryReport/launchMemoryChecker 空实现）。
-3. AppleClang 无 C++17 并行算法实现（`<execution>` 头存在但无策略），对
-   `src/main.cpp`、`include/PotreeConverter.h`、`include/sampler_poisson.h`、
-   `include/sampler_poisson_average.h` 中的 `for_each(std::execution::par, …)` /
-   `std::sort(par, …)` 以 `#if defined(__APPLE__)` 退化为串行调用。
-4. `Converter/modules/LasLoader/LasLoader.cpp`：laszip_open_reader 返回值未检查，
-   加错误日志（可选，便于诊断非法 LAS）。
+## 生成实际序列
 
-## 本仓库数据管线
+从仓库根目录运行完整 Python 管线，确保静态地图、照片、当前帧点云和标签来自同一录制：
 
-```bash
-# 1. 合并世界系 PCD → LAS 1.4（22M 点，流式两遍）
-cd tools/py && uv run python export_world_las.py \
-  --input apps/web-ui/public/kitti --output /tmp/kitti-world.las
-# 2. 建八叉树（UNCOMPRESSED 编码，客户端内置解码器直接可读）
-PotreeConverter /tmp/kitti-world.las -o apps/web-ui/public/kitti/potree --encoding UNCOMPRESSED
-# 3. manifest.json 写入 "potree": { "url": "kitti/potree" }
+```sh
+pnpm data:import:kitti \
+  --input /data/kitti --sequence 0004 \
+  --output apps/web-ui/public/datasets/kitti-0004 \
+  --url-prefix /datasets/kitti-0004
 ```
 
-验证：`packages/core/tests/potree-overlay.real.test.ts`（数据缺失自动跳过）——
-层级解析（15483 记录、代理转正、节点点数和 == 总点数）与解码点落盒校验。
+管线生成世界 PCD、过滤人工框内动态点、BEV、LAS 和 Potree，并写入 manifest。自定义输出应在忽略目录或仓库外。用 `--skip-potree` 可跳过转换器，仅保留点云、相机、标注和 BEV。
+
+HTTP 服务需要支持 `metadata.json`、`hierarchy.bin` 与 `octree.bin`，并正确处理字节 Range 请求。真实 Potree 测试在本地资源缺失时跳过，测试通过情况不能代替对当前服务器实际加载/绘制点数的检查。

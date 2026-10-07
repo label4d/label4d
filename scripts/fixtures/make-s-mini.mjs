@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Generates the S-mini synthetic fixture (contract: delivery-contracts §1).
+ * Generates the historical v2 S-mini synthetic fixture (see docs/data-formats.md).
  * Z-up world, timeUs reference axis, deterministic PRNG, 31 frames @10Hz.
  *
  * Independent ground truth (NOT computed by product code):
  *   - keyframes: frame 10 center (0,0,1), frame 20 center (10,0,1),
- *     size (4,2,2), yaw 0 (J01-2 scenario from ai-acceptance-protocol §4)
+ *     size (4,2,2), yaw 0
  *   - linear interpolation => frame 12 (2,0,1), 15 (5,0,1), 18 (8,0,1)
- *   - after J01-3 edit (frame15 -> (5,2,1)): 12 (2,0.8,1), 18 (8,0.8,1)
+ *   - after frame-15 edit (frame15 -> (5,2,1)): 12 (2,0.8,1), 18 (8,0.8,1)
  *   - projection control points via hand-written pinhole math below
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
