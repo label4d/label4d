@@ -56,6 +56,8 @@ The [data-tools guide](tools/README.md) covers directory layout, downloading sel
 
 Open imported Waymo data with `/?manifest=/datasets/waymo-normalized-20/sequence.json`. Playback uses source timestamps; 3D/BEV display complete box poses. Camera overlays use supplied 2D projected boxes and official point-to-pixel references, without claiming rolling-shutter reprojection. Source browsing does not write IndexedDB or export v1 snapshots.
 
+Add a static map to an imported normalized sequence with `pnpm data:potree:normalized --input <dataset-directory>` (requires PotreeConverter), then reload its page. Current-frame clouds remain available.
+
 For Waymo import and independent SDK checks, see the [data-tools guide](tools/README.md) and [normalized contract](docs/normalized-data.md).
 
 Dataset downloads and generated assets are not committed. KITTI and third-party dependencies retain their own usage and license terms.

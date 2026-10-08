@@ -24,6 +24,22 @@ def resource(root, relative):
     return resolved
 
 
+def validate_potree(root, descriptor, frame_count):
+    if descriptor['encoding'] != 'UNCOMPRESSED' or descriptor['frameCount'] != frame_count:
+        raise ValueError('Potree encoding/frame count mismatch')
+    files = descriptor['files']
+    if {f['path'] for f in files} != {'metadata.json', 'hierarchy.bin', 'octree.bin'} or len(files) != 3:
+        raise ValueError('Potree must bind all three converter files')
+    for entry in files:
+        path = resource(root, descriptor['path'] + '/' + entry['path'])
+        if file_hash(path) != entry['sha256']:
+            raise ValueError('Potree checksum mismatch')
+    metadata = json.loads(resource(root, descriptor['path'] + '/metadata.json').read_text())
+    if metadata.get('version') != '2.0' or metadata.get('encoding') != 'UNCOMPRESSED' or metadata.get('points') != descriptor['pointCount']:
+        raise ValueError('Potree metadata encoding/point count mismatch')
+    return metadata
+
+
 def validate_directory(root):
     import jsonschema
     sequence = json.loads((root / 'sequence.json').read_text())
@@ -117,6 +133,8 @@ def validate_directory(root):
             if camera_ids != set(cameras) or lidar_returns != expected_returns:
                 raise ValueError('Missing camera/lidar return samples')
     resource(root, sequence['bev']['path'])
+    if 'potree' in sequence:
+        validate_potree(root, sequence['potree'], len(sequence['frames']))
     return {'schema': SCHEMA, 'id': sequence['id'], 'frames': len(sequence['frames']), 'validated': True}
 
 

@@ -353,6 +353,69 @@
         "boxPaddingMeters"
       ],
       "additionalProperties": false
+    },
+    "potree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "encoding",
+        "frameCount",
+        "pointCount",
+        "policy",
+        "boxPaddingMeters",
+        "files"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "encoding": {
+          "const": "UNCOMPRESSED"
+        },
+        "frameCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pointCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "policy": {
+          "const": "all-observed-boxes-excluded"
+        },
+        "boxPaddingMeters": {
+          "type": "number",
+          "minimum": 0
+        },
+        "files": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "properties": {
+              "path": {
+                "enum": [
+                  "metadata.json",
+                  "hierarchy.bin",
+                  "octree.bin"
+                ]
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "required": [

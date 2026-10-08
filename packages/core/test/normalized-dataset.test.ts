@@ -56,6 +56,21 @@ describe('normalized source presentation',()=>{
     f.frames[0].samples[1].pointOffset=0;f.frames[0].egoToWorld=[...identity]; f.frames[0].egoToWorld[0]=2; f.publish();
     await expect(openNormalizedDataset(f.sequence,f.root+'sequence.json',new AbortController().signal)).rejects.toThrow('pose mismatch');
   });
+  it('accepts verified optional Potree and rejects corrupt or incompatible metadata', async () => {
+    const f = await fixture();
+    const metadata = encoder.encode(JSON.stringify({ version: '2.0', encoding: 'UNCOMPRESSED', points: 5 }));
+    const descriptor = { path: 'potree', encoding: 'UNCOMPRESSED', frameCount: 3, pointCount: 5,
+      policy: 'all-observed-boxes-excluded', boxPaddingMeters: .2,
+      files: await Promise.all(['metadata.json', 'hierarchy.bin', 'octree.bin'].map(async (path) => ({ path, sha256: await hash(metadata) }))) };
+    const sequence = { ...f.sequence, potree: descriptor };
+    f.resources.set(f.root + 'potree/metadata.json', metadata);
+    const provider = await openNormalizedDataset(sequence, f.root + 'sequence.json', new AbortController().signal);
+    expect(provider.description.potree?.url).toBe(f.root + 'potree'); provider.dispose();
+    f.resources.set(f.root + 'potree/metadata.json', encoder.encode('corrupt'));
+    await expect(openNormalizedDataset(sequence, f.root + 'sequence.json', new AbortController().signal)).rejects.toThrow('SHA256 mismatch');
+    sequence.potree.encoding = 'BROTLI';
+    await expect(openNormalizedDataset(sequence, f.root + 'sequence.json', new AbortController().signal)).rejects.toThrow('invalid Potree descriptor');
+  });
   it('preserves full pose, gaps, sampled camera pose, source pixels and immutable session',async()=>{
     const f=await fixture();const session=new EditorSession({raf:()=>0,cancelRaf:()=>undefined,pointCloudWindow:{ahead:0,behind:0,budgetBytes:100000}});
     await session.loadNormalized(f.sequence,f.root+'sequence.json');

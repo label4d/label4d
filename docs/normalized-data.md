@@ -14,6 +14,8 @@ flowchart LR
   cli --> pcd[pipeline/pcd.py<br/>共享 PCD 输出]
   geometry --> bev[build_tracking_bev.py<br/>共享 rasterize_bev]
   cli --> normalized[sequence.json / frames / PCD / NPZ / JPEG]
+  normalized --> static[build_normalized_potree.py<br/>框过滤 / LAS / PotreeConverter]
+  static --> potree[可选静态 Potree / 校验和]
   normalized --> validator[validate_normalized.py<br/>schema / 资源 / 点顺序绑定]
   normalized --> reference[validate_waymo_reference.py<br/>独立官方 SDK XYZ 对照]
 ```
@@ -93,3 +95,9 @@ reference-report.json         独立参考检查成功后生成
 可重复检查：`pnpm test`、`pnpm lint`、`pnpm build` 和 `pnpm --filter @labelfaster/web-ui exec playwright test --workers=2`。`normalized-source.spec.ts` 在真实 20/198 帧资产存在时检查首帧、中间帧、末帧的点数、实际观测、完整姿态、照片与采样时间，以及五相机切换、实际绘制的官方点像素、播放和视图重新挂载；缺少资产会明确跳过。SDK 数值覆盖仍以上表为准，浏览器采样验证不代表逐帧全像素或生产规模性能验收。
 
 本次实现检查：106 个核心测试与 15 个浏览器测试通过，真实 20/198 帧资源均存在，未跳过 Waymo/KITTI 浏览器覆盖。已视觉检查 3D、BEV 与照片叠加；`pnpm lint`、`pnpm build` 通过。构建仍有 bundle 大小提示，主线程解码与生产规模性能留在路线图。
+
+## 可选静态 Potree
+
+`sequence.json.potree` 是兼容旧序列的可选资源描述，包含相对目录 `path`、固定 `encoding: UNCOMPRESSED`、`frameCount`、过滤后的 `pointCount`、`policy: all-observed-boxes-excluded`、`boxPaddingMeters`，以及三个文件的路径与 SHA256。metadata 的版本、编码与点数必须匹配。新增此派生层不改变源身份或坐标；没有此字段时开关保持禁用。
+
+生成命令、发布顺序及过滤限制见 [工具说明](../tools/README.md#为规范化序列添加静态-potree)。离线校验检查三个文件哈希；浏览器校验 metadata 哈希，hierarchy 和 octree 使用既有 Potree 加载器，Range 分块不提供整文件哈希保证。相机使用原始逐帧点的参考像素，不投影聚合的静态层。

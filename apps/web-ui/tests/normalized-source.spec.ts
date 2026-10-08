@@ -9,11 +9,24 @@ for (const size of [20, 198]) test(`Waymo ${size} frames: source browsing, camer
   const sequence = JSON.parse(readFileSync(root + 'sequence.json', 'utf8'));
   const errors: string[] = []; page.on('pageerror', (e) => errors.push(String(e)));
   const read = () => page.evaluate(async () => (window as any).__LABELFASTER_TEST__.read());
+  const tree = sequence.potree ? page.waitForResponse((r) => r.url().endsWith(`/waymo-normalized-${size}/potree/octree.bin`) && r.status() === 206) : null;
   await page.goto(`/?manifest=/datasets/waymo-normalized-${size}/sequence.json`);
   await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('只读浏览', { timeout: 60000 });
   await expect.poll(async () => (await read()).frame.status, { timeout: 60000 }).toBe('ready');
   await expect(page.getByLabel('选择相机 1')).toHaveValue('camera-1');
   await expect(page.getByRole('button', { name: '3D框', exact: true })).toBeDisabled();
+  await page.getByText('点云显示', { exact: true }).click();
+  const potree = page.getByRole('checkbox', { name: '静态点云(Potree)' });
+  if (tree) {
+    expect((await tree).status()).toBe(206);
+    await expect(potree).toBeEnabled();
+    await expect(page.getByRole('status', { name: 'Potree 加载状态' })).toContainText('Potree 已显示', { timeout: 30000 });
+    await potree.uncheck();
+    await expect(page.getByRole('status', { name: 'Potree 加载状态' })).toHaveText('Potree 已关闭');
+    await potree.check();
+    await expect(page.getByRole('status', { name: 'Potree 加载状态' })).toContainText('Potree 已显示', { timeout: 30000 });
+  } else await expect(potree).toBeDisabled();
+  await page.getByText('点云显示', { exact: true }).click();
   const sampleFrames = [0, Math.floor(size/2), size-1];
   for (const frame of sampleFrames) {
     if (frame) { await page.getByLabel('跳转到帧', { exact: true }).fill(String(frame)); await page.getByLabel('跳转到帧', { exact: true }).press('Enter'); }

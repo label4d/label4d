@@ -134,3 +134,7 @@ flowchart TD
 3D、BEV、三视图和射线选框使用完整 `boxToWorld`；时间轴按真实时间显示实际观测，不填补缺帧。源观测的辅助位置/yaw 列只用于属性与时间轴展示，源状态保留完整 Float64 数值，禁止将辅助列导出为 v1。编辑工具、快照/nuScenes 导出、QA 和持久化在源浏览模式禁用，Session API 与 store 同时拒绝写入。
 
 相机使用每张照片自己的 `cameraToWorld` 与采样时间，默认绘制源 `projected_lidar_box` 的 2D 矩形，点云开关绘制官方像素引用；不绘制由静态模型近似的 3D 框。未关联当前 3D 观测的 2D 框不绘制，没有该组件时不补造矩形。滚动快门计算投影、独立 2D 标注和运动目标重投影尚未实现。
+
+### 规范化序列的可选静态层
+
+`tools/py/build_normalized_potree.py` 从已经校验的逐帧世界 PCD 与完整姿态观测复用 `pipeline/geometry.py` 框过滤、`export_world_las.py` 和 PotreeConverter，生成静态层后更新离线索引。`NormalizedDataset.ts` 校验可选描述和 metadata 哈希，映射到运行时 `potree.url`；`EditorSession`、`PotreeOverlay` 与 `ThreeDView` 复用已有分块调度、GPU 预算和释放流程。逐帧点云及官方相机像素绑定继续独立使用，不从聚合层推导。

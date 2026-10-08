@@ -68,6 +68,7 @@ export function decodeCameraReferences(bytes: ArrayBuffer, count: number): Int32
 export async function openNormalizedDataset(input: unknown, sequenceUrl: string, signal: AbortSignal): Promise<DatasetProvider> {
   const s = input as { schema: string; id: string; coordinateSystem: Record<string, unknown>; time: Record<string, unknown>;
     sensors: Sensor[]; frames: Array<{ index: number; timeMicros: number; path: string }>;
+    potree?: { path: string; encoding: string; frameCount: number; pointCount: number; policy: string; boxPaddingMeters: number; files: Array<{ path: string; sha256: string }> };
     provenance: { dataset: string }; bev: { path: string; originX: number; originZ: number; metersPerPixel: number; width: number; height: number } };
   requireValid(s?.schema === 'labelfaster.normalized-sequence/1' && typeof s.id === 'string' && s.id, 'unsupported schema or identity');
   const c = s.coordinateSystem, t = s.time;
@@ -168,11 +169,24 @@ export async function openNormalizedDataset(input: unknown, sequenceUrl: string,
     // Columns support the existing timeline/property presentation only, never serialization.
     record.kf = { frames: Int32Array.from(entries.map(([f]) => f)), pos: Float32Array.from(entries.flatMap(([, a]) => [a.pos.x, a.pos.y, a.pos.z])), yaw: Float32Array.from(entries.map(([, a]) => a.yaw)), size: Float32Array.from(entries.flatMap(([, a]) => [a.size.x, a.size.y, a.size.z])) };
   }
+  if (s.potree) {
+    const p = s.potree;
+    requireValid(p.encoding === 'UNCOMPRESSED' && p.frameCount === frames.length && Number.isSafeInteger(p.pointCount) && p.pointCount > 0 &&
+      p.policy === 'all-observed-boxes-excluded' && Number.isFinite(p.boxPaddingMeters) && p.boxPaddingMeters >= 0 &&
+      Array.isArray(p.files) && p.files.length === 3 && new Set(p.files.map((f) => f.path)).size === 3 &&
+      p.files.every((f) => ['metadata.json', 'hierarchy.bin', 'octree.bin'].includes(f.path) && hashPattern.test(f.sha256)), 'invalid Potree descriptor');
+    const response = await fetch(datasetUrl(root, `${p.path}/metadata.json`), { signal });
+    requireValid(response.ok, 'missing Potree metadata');
+    const bytes = await response.arrayBuffer();
+    await checkSha256(bytes, p.files.find((f) => f.path === 'metadata.json')!.sha256);
+    const metadata = JSON.parse(new TextDecoder().decode(bytes));
+    requireValid(metadata.version === '2.0' && metadata.encoding === p.encoding && metadata.points === p.pointCount, 'Potree metadata mismatch');
+  }
   const b = s.bev;
   requireValid(b && [b.originX,b.originZ,b.metersPerPixel].every(Number.isFinite) && b.metersPerPixel > 0 && Number.isSafeInteger(b.width) && b.width > 0 && Number.isSafeInteger(b.height) && b.height > 0, 'invalid BEV extent');
   const timeMicros = s.frames.map((f) => f.timeMicros);
   const description: NormalizedRuntimeSequence = { schema: 'labelfaster.browser-observations/1', id: s.id, frameCount: frames.length, fps: frames.length > 1 ? (frames.length - 1) * 1e6 / timeMicros[timeMicros.length-1] : 10,
-    labels, bev: { image: { ...b, url: datasetUrl(root, b.path) } }, cameras: cameras.map((a) => ({ id: a.id, model: 'pinhole', width: a.width!, height: a.height!, intrinsics: { fx: a.intrinsics![0], fy: a.intrinsics![1], cx: a.intrinsics![2], cy: a.intrinsics![3] }, distortion: a.distortion, cameraToEgo: a.sensorToEgo, imageTemplate: '' })) };
+    labels, potree: s.potree ? { url: datasetUrl(root, s.potree.path) } : undefined, bev: { image: { ...b, url: datasetUrl(root, b.path) } }, cameras: cameras.map((a) => ({ id: a.id, model: 'pinhole', width: a.width!, height: a.height!, intrinsics: { fx: a.intrinsics![0], fy: a.intrinsics![1], cx: a.intrinsics![2], cy: a.intrinsics![3] }, distortion: a.distortion, cameraToEgo: a.sensorToEgo, imageTemplate: '' })) };
   let disposed = false;
   const cameraSample = (id: string, frame: number) => frames[frame].samples.find((a) => a.sensorId === id)!;
   return { description, timeMicros, egoPoses, observations,

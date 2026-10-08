@@ -13,7 +13,7 @@ export interface NormalizedRuntimeSequence {
   cameras: CameraConfig[];
   labels: LabelDef[];
   bev: { image: BevImageConfig; tileset?: never };
-  potree?: never;
+  potree?: { url: string };
 }
 export type RuntimeSequence = SequenceManifest | NormalizedRuntimeSequence;
 

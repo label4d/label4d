@@ -115,3 +115,18 @@ uv run --project tools/py --python 3.11 --extra waymo-reference \
 ```
 
 校验器从 Waymo 官方 GitHub 固定 commit 下载三个 SDK 数值源文件，验证固定 SHA256 后执行；框角点只执行原文件中的公开 corner 函数，避免依赖未生成的 protobuf。参考代码保留在临时目录，不复制入库。输出 `reference-report.json`，对照双回波 XYZ、3D 框八角点及原始点到相机像素的索引对应；不宣称已经实现滚动快门计算投影或浏览器显示。该 extra 的 TensorFlow 依赖限 Python <3.14，使用上述 Python 3.11 命令。
+
+## 为规范化序列添加静态 Potree
+
+已有完整逐帧 PCD 和框观测时，无需重新读取原始 Parquet：
+
+```sh
+pnpm data:potree:normalized --input apps/web-ui/public/datasets/waymo-normalized-198
+pnpm data:validate:normalized apps/web-ui/public/datasets/waymo-normalized-198
+```
+
+`py/build_normalized_potree.py` 复用完整姿态框过滤、PCD → LAS 和 PotreeConverter，默认从每帧排除所有观测框内及向外 0.2 米的点，再聚合为 UNCOMPRESSED Potree。可用 `--box-padding` 调整过滤范围，`--potree-converter` 或 `LABELFASTER_POTREE_CONVERTER` 指定转换器。静态是过滤策略的名称：无标签的运动物体仍可能残留，静止但有标签的物体也会被移除。
+
+生成与校验均在临时目录完成；先发布 `potree/`，最后原子替换 `sequence.json`。转换失败不启用开关；已有 Potree 拒绝覆盖，重建应使用新的导入输出。序列身份、原始点序、相机参考像素和保存的标注保持不变。`potree/build-report.json` 记录逐帧保留/排除点数；索引绑定 metadata、hierarchy、octree 的 SHA256。离线校验检查全部文件，浏览器启动时校验 metadata，octree 继续按 HTTP Range 加载，浏览器不对整份 octree 做哈希校验。
+
+刷新同一 `sequence.json` 页面后，静态点云开关可用，逐帧点云仍用于播放和相机像素显示。所有生成文件留在被忽略的数据目录。

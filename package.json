@@ -21,7 +21,8 @@
     "test:tools": "uv run --project tools/py python -m unittest discover -s tools/py/tests -p \"test_*.py\"",
     "data:import:waymo": "uv run --project tools/py --extra waymo python tools/py/import_waymo.py",
     "data:validate:normalized": "uv run --project tools/py --extra waymo python tools/py/validate_normalized.py",
-    "test:tools:waymo": "uv run --project tools/py --extra waymo python -m unittest discover -s tools/py/tests -p \"test_*.py\""
+    "test:tools:waymo": "uv run --project tools/py --extra waymo python -m unittest discover -s tools/py/tests -p \"test_*.py\"",
+    "data:potree:normalized": "uv run --project tools/py --extra waymo python tools/py/build_normalized_potree.py"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "6.21.0",
