@@ -27,7 +27,7 @@ SelectionSet / ToolMachine / Playhead]
 快照与持久编辑记录]
 ```
 
-首页默认加载 `/kitti-camera/manifest.json`；`?manifest=...` 可指定其他实际数据集。产品不再包含合成演示或 demo 参数分支。真实数据缺失或返回非 JSON 时显示加载错误，不自动替换为合成数据。v1 资源加载后尝试导入同目录的 `snapshot.json`，再启用本地持久化，恢复该序列已有标注。两种输入都通过 DatasetProvider 提供资源；规范化 `sequence.json` 不请求 v1 快照或打开 IndexedDB。
+顶部 `Toolbar` 提供 KITTI / Waymo 选择器，切换时更新 `manifest` 查询参数并重新加载页面，沿用启动和序列身份恢复流程；加载/保存进行中、历史提交未完成或保存失败时禁用切换。自定义 manifest 显示为自定义数据集。预置入口需要本地准备对应数据，缺失时报告错误。首页默认加载 `/kitti-camera/manifest.json`；`?manifest=...` 可指定其他实际数据集。产品不再包含合成演示或 demo 参数分支。真实数据缺失或返回非 JSON 时显示加载错误，不自动替换为合成数据。v1 资源加载后尝试导入同目录的 `snapshot.json`，再启用本地持久化，恢复该序列已有标注。两种输入都通过 DatasetProvider 提供资源；规范化 `sequence.json` 不请求 v1 快照或打开 IndexedDB。
 
 | 边界 | 代码与职责 |
 | --- | --- |

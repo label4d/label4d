@@ -55,6 +55,8 @@ Open `/?manifest=/datasets/kitti-0004/manifest.json` on the running app. `--skip
 
 The [data-tools guide](tools/README.md) covers directory layout, downloading selected official frames, full imports, output identity and rebuilding. The [KITTI verification guide](docs/real-camera-preview.md) covers the supplied 200-frame preview.
 
+Use the dataset selector in the top bar to switch between the prepared KITTI preview and the full Waymo sequence (`/datasets/waymo-normalized-198/sequence.json`). Switching reloads the page and restores saved KITTI annotations when you return. Both datasets must be generated locally; a missing resource reports a loading error.
+
 Open imported Waymo data with `/?manifest=/datasets/waymo-normalized-20/sequence.json`. Playback uses source timestamps; 3D/BEV display complete box poses. Camera overlays use supplied 2D projected boxes and official point-to-pixel references, without claiming rolling-shutter reprojection. Source browsing does not write IndexedDB or export v1 snapshots.
 
 Add a static map to an imported normalized sequence with `pnpm data:potree:normalized --input <dataset-directory>` (requires PotreeConverter), then reload its page. Current-frame clouds remain available.
