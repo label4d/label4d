@@ -6,6 +6,7 @@
 | --- | --- |
 | [实现架构](architecture.md) | 模块边界、Mermaid 架构图、帧呈现与持久化流程 |
 | [数据格式](data-formats.md) | v1 manifest、快照、坐标和 URL 约定 |
+| [数据下载与复现](data-reproduction.md) | 从零准备 KITTI / Waymo、下载授权、Python 预处理、Potree、校验和排错 |
 | [数据工具](../tools/README.md) | Python 导入新序列、下载、重建与测试 |
 | [KITTI 对齐与验证](real-camera-preview.md) | 官方预览准备、标定、视图含义和独立验证 |
 | [Potree 渲染](potree-rendering.md) | 流式选择、采样、预算和诊断 |

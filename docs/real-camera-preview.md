@@ -1,6 +1,8 @@
 # KITTI 相机、4D 点云与静态地图对齐
 
-执行 `pnpm fixtures:camera-preview`，打开 `/?manifest=/kitti-camera/manifest.json`（或「文件与导出 → KITTI 真实相机序列」）。首次运行按官方 ZIP 字节范围获取 tracking 0011 前 200 帧，下载缓存不入 Git。需 Python、uv 和已构建的 PotreeConverter；见 `third_party/POTREE_BUILD.md`，也可设置 `LABELFASTER_POTREE_CONVERTER`。
+执行 `pnpm fixtures:camera-preview`，打开 `/?manifest=/kitti-camera/manifest.json`（或顶部选择 KITTI）。首次运行按官方 ZIP 字节范围获取 tracking 0011 前 200 帧，下载缓存不入 Git。需 Python、uv 和已构建的 PotreeConverter；见 `third_party/POTREE_BUILD.md`，也可设置 `LABELFASTER_POTREE_CONVERTER`。
+
+从零下载和完整命令见 [数据复现指南](data-reproduction.md)。
 
 正式导入、点云过滤、bbox 转换和 BEV 计算已统一到 `tools/py/`，此预览复用同一套工具。导入新序列的参数、目录布局与命令见 [数据工具说明](../tools/README.md)。
 

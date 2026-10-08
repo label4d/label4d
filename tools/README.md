@@ -2,6 +2,8 @@
 
 正式的数据导入和数值计算优先使用 **Python + NumPy**，依赖由 `tools/py/pyproject.toml` 和 `uv.lock` 固定。浏览器负责展示与编辑；数据转换不依赖运行中的前端。
 
+从零下载、生成顶部两个预置数据集、校验和排错的完整步骤见 [数据复现指南](../docs/data-reproduction.md)。本文保留工具入口和参数索引。
+
 ## 导入新的 KITTI tracking 序列
 
 将官方五个 tracking 包解压到同一目录，保留其 `training/` 层级：

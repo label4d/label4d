@@ -4,6 +4,8 @@
 
 序列索引的机器规范见 [JSON Schema](../fixtures/schemas/normalized-sequence.v1.schema.json)，资源与跨文件约束由 [validate_normalized.py](../tools/py/validate_normalized.py) 检查。revision 1 实现完整可用样本的严格 profile：缺少必要传感器样本则拒绝导入；异步最近邻匹配、missing 样本及标定随时间变化仍需扩展契约，不能把默认行为视为已支持。
 
+下载授权、单片段组件下载、导入与静态 Potree 的完整命令见 [数据复现指南](data-reproduction.md)。
+
 ## 文件和模块
 
 ```mermaid

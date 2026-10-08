@@ -53,6 +53,8 @@ pnpm data:import:kitti \
 
 Open `/?manifest=/datasets/kitti-0004/manifest.json` on the running app. `--skip-potree` produces current-frame clouds, annotations, photos and BEV without requiring PotreeConverter. For a static Potree map, build the [converter](third_party/POTREE_BUILD.md) and omit that flag.
 
+For a complete download → preprocessing → validation → browser walkthrough, see the [reproduction guide](docs/data-reproduction.md).
+
 The [data-tools guide](tools/README.md) covers directory layout, downloading selected official frames, full imports, output identity and rebuilding. The [KITTI verification guide](docs/real-camera-preview.md) covers the supplied 200-frame preview.
 
 Use the dataset selector in the top bar to switch between the prepared KITTI preview and the full Waymo sequence (`/datasets/waymo-normalized-198/sequence.json`). Switching reloads the page and restores saved KITTI annotations when you return. Both datasets must be generated locally; a missing resource reports a loading error.

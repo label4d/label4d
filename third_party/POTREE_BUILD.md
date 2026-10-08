@@ -9,6 +9,9 @@
 ```sh
 brew install cmake tbb
 git clone --recursive https://github.com/potree/PotreeConverter.git third_party/PotreeConverter
+# 本地真实 KITTI / Waymo 样本验证使用的上游 commit
+git -C third_party/PotreeConverter checkout a70ef212198b0e5ae1d071713a0c8cbda8fcc9a7
+git -C third_party/PotreeConverter submodule update --init --recursive
 git -C third_party/PotreeConverter apply ../PotreeConverter-apple.patch
 cmake -S third_party/PotreeConverter -B third_party/PotreeConverter/build \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
@@ -17,6 +20,8 @@ cmake -S third_party/PotreeConverter -B third_party/PotreeConverter/build \
   -DCMAKE_EXE_LINKER_FLAGS="-L$(brew --prefix tbb)/lib"
 cmake --build third_party/PotreeConverter/build --parallel 8
 ```
+
+上述步骤用于新的 clone；已有 checkout 时先检查本地修改和是否已经应用补丁，避免覆盖修改或重复应用。固定 commit 便于复现，但不保证不同编译器/平台输出逐字节相同。
 
 导入器默认查找 `third_party/PotreeConverter/build/PotreeConverter`。也可传 `--potree-converter /path/to/PotreeConverter` 或设置 `LABELFASTER_POTREE_CONVERTER`。
 
