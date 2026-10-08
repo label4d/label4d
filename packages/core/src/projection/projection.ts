@@ -5,6 +5,7 @@ import {
   mat4Multiply,
   transformPoint,
 } from '../geometry/math';
+import type { SourceRectangle } from '../dataset/DatasetProvider';
 import type { Vec3 } from '../geometry/math';
 import type { CameraConfig, CameraModelType } from '../io/manifest';
 
@@ -187,6 +188,10 @@ const tmpB = new Float64Array(16);
 const tmpPoint: Vec3 = { x: 0, y: 0, z: 0 };
 
 export class CameraProjector {
+  /** Optional per-image world pose and official reference overlays. */
+  poseProvider: ((frame: number) => readonly number[]) | null = null;
+  sourceBoxes: ((frame: number) => readonly SourceRectangle[]) | null = null;
+  sourceCameraId: number | null = null;
   private cachedFrame = -1;
   private readonly worldToCam = new Float64Array(16);
 
@@ -202,6 +207,9 @@ export class CameraProjector {
 
   private ensureFrame(frame: number): void {
     if (this.cachedFrame === frame) return;
+    if (this.poseProvider) {
+      mat4Invert(this.poseProvider(frame), this.worldToCam); this.cachedFrame = frame; return;
+    }
     const camToEgo = this.config.cameraToEgo;
     mat4Invert(camToEgo, tmpA); // ego -> camera
     if (this.ego) {

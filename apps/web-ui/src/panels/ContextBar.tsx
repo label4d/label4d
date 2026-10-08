@@ -13,9 +13,9 @@ export function ContextBar({ mode, onMode, focus, onFocus }: {
   const tool = TOOLS.find((t) => t.id === session.tools.activeTool)!;
   const geometryTool = ['polyline', 'polygon', 'vertexEdit'].includes(tool.id);
   const creating = geometryTool || tool.id === 'box';
-  let hint = tool.hint;
+  let hint = session.readOnly && tool.id === 'select' ? '点击查看源观测 · 拖动空白区域平移视图' : tool.hint;
   if (session.tools.state.name === 'drawBox') hint = session.tools.state.stage === 'heading' ? '拖出朝向与长度，松开进入宽度步骤' : '继续拖动确定宽度，松开完成';
-  if (session.frameStatus !== 'ready') hint = '正在加载目标帧，准备好后可继续编辑';
+  if (session.frameStatus !== 'ready') hint = session.readOnly ? '正在加载目标帧的点云与照片' : '正在加载目标帧，准备好后可继续编辑';
   return <div className="context-bar">
     <div className="view-tabs" role="group" aria-label="主视图">
       <button aria-label="4D 点云模式" aria-pressed={mode === 'cloud'} className={mode === 'cloud' ? 'is-active' : ''} onClick={() => onMode('cloud')}><Orbit size={16} /><span>4D 点云</span></button>

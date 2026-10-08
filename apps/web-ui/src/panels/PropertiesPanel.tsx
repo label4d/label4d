@@ -48,6 +48,20 @@ export function PropertiesPanel() {
     const frameAttrs = session.store.getFrameAttributes(track.meta.id, frame) ?? {};
     const copyTarget = Number(copyFrame); const copyValid = copyFrame.trim() !== '' && Number.isSafeInteger(copyTarget) && copyTarget >= 0 && copyTarget < session.frameCount;
     const commit = (patch: Partial<KeyframeState>) => { if (state) safe(() => session.editKeyframe(track.meta.id, frame, { pos: state.pos, size: state.size, yaw: state.yaw, ...patch })); };
+    if (session.readOnly) return <section className="properties-panel" key={track.meta.id}>
+      <div className="property-identity"><Box size={18} /><h2>{track.meta.label}<span>#{track.meta.id.slice(-4)}</span></h2><span className="state-chip">源观测</span></div>
+      <p className="property-note">完整姿态 · 只读 · 缺失帧不插值</p>
+      {state ? <section className="property-section"><div className="property-section-heading"><h3>帧 {frame} · {session.playhead.timeAt(frame).toFixed(3)} s</h3></div>
+        <p className="property-note">中心 XYZ · m</p><p>{[state.pos.x,state.pos.y,state.pos.z].map((v) => v.toFixed(3)).join(' / ')}</p>
+        <p className="property-note">长 / 高 / 宽 · m</p><p>{[state.size.x,state.size.y,state.size.z].map((v) => v.toFixed(3)).join(' / ')}</p>
+        <p className="property-note">box → world · 完整旋转矩阵</p>
+        <pre aria-label="源框旋转矩阵">{[0,1,2].map((r) => [0,1,2].map((c) => state.boxToWorld![c*4+r].toFixed(4)).join('  ')).join('\n')}</pre>
+      </section> : <p className="property-note">当前帧没有源观测，请跳转到观测帧。</p>}
+      <section className="property-section"><h3>实际观测 · {kf.frames.length} 帧</h3>
+        <div className="keyframe-actions"><button className="icon-button" aria-label="上一个观测帧" disabled={previous === undefined} onClick={() => previous !== undefined && session.setFrame(previous)}><ArrowLeft size={16} /></button><button className="icon-button" aria-label="下一个观测帧" disabled={next === undefined} onClick={() => next !== undefined && session.setFrame(next)}><ArrowRight size={16} /></button></div>
+        <div className="keyframe-chips" aria-label="观测帧跳转">{[...kf.frames].map((f) => <button key={f} className={f === frame ? 'is-current' : ''} onClick={() => session.setFrame(f)}>{f}</button>)}</div>
+      </section>
+    </section>;
     return <fieldset disabled={!session.canEdit} className="properties-panel" key={track.meta.id}>
       <div className="property-identity"><Box size={18} /><h2>{track.meta.label}<span>#{track.meta.id.slice(-4)}</span></h2><span className={`state-chip ${state?.atKeyframe ? 'keyframe' : ''}`}>{state?.atKeyframe ? '关键帧' : '插值帧'}</span></div>
       {track.meta.source === 'model' && <p className="property-note">模型候选 · 置信度 {track.meta.confidence?.toFixed(2) ?? '未提供'}</p>}

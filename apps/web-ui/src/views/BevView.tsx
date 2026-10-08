@@ -289,9 +289,13 @@ export function BevView() {
         return;
       }
       if (e.button !== 0) return;
-      if (!session.canEdit) return;
+      if (!session.canEdit && !(session.readOnly && session.frameStatus === 'ready')) return;
       const g = toGesture(e);
       const ctx = buildContext(g.world, g.rayOrigin, g.rayDir, e);
+      if (session.readOnly && session.tools.activeTool === 'select' && ctx.pickedId) {
+        session.selection.select([ctx.pickedId], e.shiftKey ? 'toggle' : 'replace');
+        return;
+      }
       // 空白处左键拖动 = 平移视图（Shift 保留给框选）
       if (session.tools.activeTool === 'select' && !ctx.pickedId && !e.shiftKey) {
         panLast = { x: e.clientX, y: e.clientY };
@@ -405,14 +409,14 @@ export function BevView() {
       session.selection.select([ctx.pickedId]);
       menuDiv.innerHTML = '';
       const isTrack = !!session.store.getTrack(ctx.pickedId);
-      if (isTrack) {
+      if (isTrack && !session.readOnly) {
         menuItem('设为关键帧 (K)', () => session.setKeyframeAtCurrentFrame(ctx.pickedId!));
         menuItem('删除关键帧', () => session.removeKeyframeAtCurrentFrame(ctx.pickedId!));
         menuItem('拆分轨迹', () => session.splitSelectedAtCurrentFrame());
         if (session.selection.size >= 2) menuItem('合并轨迹', () => session.mergeSelectedTracks());
         menuItem('复制轨迹 (偏移)', () => session.duplicateSelection());
       }
-      menuItem('删除 (Del)', () => session.deleteSelection());
+      if (!session.readOnly) menuItem('删除 (Del)', () => session.deleteSelection());
       const label = isTrack
         ? session.store.getTrack(ctx.pickedId)?.meta.label
         : session.store.getGeometry(ctx.pickedId)?.meta.label;
@@ -526,7 +530,7 @@ export function BevView() {
         blinkOn: session.blinkOn,
         velocityIds,
       });
-      instance.fps = session.playhead.fps;
+      instance.fps = session.playhead.fps; instance.timeAt = (frame) => session.playhead.timeAt(frame);
       // drag preview (move/rotate) applied at render level only
       const moveDelta = session.tools.movePreviewDelta();
       const rotateDelta = session.tools.rotatePreviewDelta();

@@ -2,9 +2,9 @@
 
 ## Start here
 
-Read `README.md` and the relevant parts of `docs/architecture.md`. Read `docs/data-formats.md` before changing geometry, projection, import or serialization; read `tools/README.md` before changing offline tooling. These describe the implemented v1 application. `docs/roadmap.md` lists future work, not current guarantees.
+Read `README.md` and the relevant parts of `docs/architecture.md`. Read `docs/data-formats.md` before changing geometry, projection, import or serialization; read `tools/README.md` before changing offline tooling. These describe the implemented v1 editor and normalized source browser. `docs/roadmap.md` lists future work, not current guarantees.
 
-For Waymo or normalized offline data, also read `docs/normalized-data.md`. `labelfaster.normalized-sequence/1` is an offline contract, not a browser manifest or the historical v2 fixture format. Do not emit a lossy v1 manifest for unsupported sample timing or full box poses.
+For Waymo or normalized offline data, also read `docs/normalized-data.md`. `labelfaster.normalized-sequence/1` is an offline contract read through `dataset/NormalizedDataset.ts`; its internal browser description is `labelfaster.browser-observations/1`, not a v1 manifest or historical v2 fixture. Do not emit a lossy v1 manifest for unsupported sample timing or full box poses.
 
 Inspect `git status` before editing. Preserve unrelated work and saved annotations. Do not assume generated KITTI assets, a running service, PotreeConverter or any contributor's local paths exist.
 
@@ -18,6 +18,7 @@ Inspect `git status` before editing. Preserve unrelated work and saved annotatio
 ## Correctness rules
 
 - Runtime manifests and snapshots are **formatVersion 1**, right-handed **Y-up**. Matrices are column-major; box size is `[length, height, width]`; yaw points along `(cos(yaw), 0, -sin(yaw))` in XZ. Reject incompatible input rather than silently reinterpreting it.
+- Normalized source observations are read-only, preserve complete rigid poses and exact-frame gaps. Do not serialize their timeline columns as v1 keyframes, enable persistence, or substitute static geometric projection for official point pixels/source 2D boxes.
 - Render and edit the **presented** frame (`session.frame`), not a requested frame whose resources are still loading. Preserve epoch checks, editing gates and cancellation behavior.
 - Use same-recording, same-frame photos, lidar, poses, calibration and labels. For KITTI, OXTS angles are radians, label locations are bottom centers, and `rotation_y` rotates the camera X length axis. Include rectification and the projection baseline.
 - Sequence identity determines persisted-document restoration. A different recording or coordinate version needs a different ID. Never clear browser storage to hide a seed-data mismatch.

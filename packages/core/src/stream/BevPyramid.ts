@@ -28,7 +28,7 @@ export function levelCount(config: TilesetConfig): number {
 export class BevPyramid {
   readonly maxLevel: number;
 
-  constructor(readonly config: TilesetConfig) {
+  constructor(readonly config: TilesetConfig, readonly singleImage = false) {
     this.maxLevel = levelCount(config) - 1;
   }
 
@@ -85,8 +85,8 @@ export class BevPyramid {
     return {
       minX: this.config.originX + x * size,
       minZ: this.config.originZ + y * size,
-      maxX: this.config.originX + (x + 1) * size,
-      maxZ: this.config.originZ + (y + 1) * size,
+      maxX: this.config.originX + (this.singleImage ? this.config.width * this.config.metersPerPixel : (x + 1) * size),
+      maxZ: this.config.originZ + (this.singleImage ? this.config.height * this.config.metersPerPixel : (y + 1) * size),
     };
   }
 

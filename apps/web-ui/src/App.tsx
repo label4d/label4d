@@ -171,7 +171,7 @@ function Workspace() {
     <section className={`timeline-section ${timelineOpen ? '' : 'is-collapsed'}`} aria-label="轨迹时间轴">
       {timelineOpen && <ResizeHandle axis="y" value={timelineHeight} onChange={setTimelineHeight} min={48} max={230} reverse label="调整时间轴高度" />}
       <div className="timeline-heading"><button className="text-button" aria-expanded={timelineOpen} onClick={() => setTimelineOpen((v) => !v)}>{timelineOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}轨迹时间轴</button>
-        <div className="timeline-legend"><span><i className="legend-bar" />存在区间</span><span><i className="legend-diamond" />关键帧</span><span><i className="legend-line" />当前帧</span></div>
+        <div className="timeline-legend"><span><i className="legend-bar" />{session.readOnly ? "观测帧" : "存在区间"}</span><span><i className="legend-diamond" />{session.readOnly ? "源观测" : "关键帧"}</span><span><i className="legend-line" />当前帧</span></div>
         <span className="timeline-tip">点击轨迹名选择 · 拖动标尺切帧</span>
       </div>
       <div className="timeline-canvas" style={{ height: timelineOpen ? Math.min(230, Math.max(48, timelineHeight)) : 0 }}><Timeline /></div>

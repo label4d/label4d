@@ -20,12 +20,12 @@ export function Toolbar({ onToggleInspector, inspectorOpen }: { onToggleInspecto
   return <header className="app-header">
     <div className="brand"><BrandMark /><span>Labelfaster <small>4D</small></span></div>
     <div className="sequence-heading"><FolderOpen size={16} /><span>{session.manifest?.id ?? '加载序列…'}</span>
-      <span className="sequence-kind">标注序列</span></div>
+      <span className="sequence-kind">{session.readOnly ? '源观测 · 只读' : '标注序列'}</span></div>
     <div className="header-actions">
       <div className={`save-indicator ${saved ? 'is-saved' : session.saveStatus === 'error' ? 'is-error' : ''}`}>
         {saved ? <Check size={15} /> : loading ? <Loader2 size={15} className="spin" /> : <CloudOff size={15} />}
         <span role="status" aria-label="本地保存状态" title="修改自动保存到当前浏览器">
-          {saved ? `已保存 r${session.savedRevision}` : session.saveStatus === 'saving' ? '保存中…' : session.saveStatus === 'loading' ? '恢复中…' : session.saveStatus === 'error' ? '保存失败' : '未启用本地保存'}
+          {session.readOnly ? '只读浏览 · 不写入标注文档' : saved ? `已保存 r${session.savedRevision}` : session.saveStatus === 'saving' ? '保存中…' : session.saveStatus === 'loading' ? '恢复中…' : session.saveStatus === 'error' ? '保存失败' : '未启用本地保存'}
         </span>
         {session.saveStatus === 'error' && <button className="text-button" onClick={() => session.history.retryFailed()}>重试</button>}
       </div>
@@ -40,8 +40,8 @@ export function Toolbar({ onToggleInspector, inspectorOpen }: { onToggleInspecto
         <div className="menu-divider" />
         <div className="menu-heading">序列文件</div>
         <button className="menu-action" disabled={!session.canEdit} onClick={() => fileRef.current?.click()}><Upload size={16} /><span>导入快照<small>替换当前序列的标注</small></span></button>
-        <button className="menu-action" disabled={loading} onClick={() => download(session.exportSnapshot(), `${session.manifest?.id ?? 'sequence'}.snapshot.json`)}><Download size={16} /><span>导出快照<small>当前已提交的标注内容</small></span></button>
-        <button className="menu-action" disabled={loading} onClick={() => download(session.exportNuScenes({ sampleStep: 5 }), `${session.manifest?.id ?? 'sequence'}.nuscenes.json`)}><FileJson size={16} /><span>导出 nuScenes 草稿<small>草稿格式，尚未完成兼容验收</small></span></button>
+        <button className="menu-action" disabled={loading || session.readOnly} onClick={() => download(session.exportSnapshot(), `${session.manifest?.id ?? 'sequence'}.snapshot.json`)}><Download size={16} /><span>导出快照<small>当前已提交的标注内容</small></span></button>
+        <button className="menu-action" disabled={loading || session.readOnly} onClick={() => download(session.exportNuScenes({ sampleStep: 5 }), `${session.manifest?.id ?? 'sequence'}.nuscenes.json`)}><FileJson size={16} /><span>导出 nuScenes 草稿<small>草稿格式，尚未完成兼容验收</small></span></button>
       </Dropdown>
       <button className={`icon-button inspector-toggle ${inspectorOpen ? 'is-active' : ''}`} aria-label="切换属性面板" aria-pressed={inspectorOpen} title="显示或隐藏对象与属性" onClick={onToggleInspector}><PanelRight size={19} /></button>
     </div>

@@ -24,6 +24,13 @@ export class Playhead {
 
   canAdvance: () => boolean = () => true;
   fps = 10;
+  private times: readonly number[] | null = null;
+
+  setTimeMicros(times: readonly number[] | null): void {
+    if (times && (times.length !== this.frameCount || times.some((t, i) => !Number.isSafeInteger(t) || t < 0 || (i > 0 && t <= times[i-1])))) throw new Error('Invalid playback time axis');
+    this.times = times?.slice() ?? null; this.accumulator = 0;
+  }
+  timeAt(frame: number): number { return this.times ? this.times[frame] / 1e6 : frame / this.fps; }
   speed = 1;
   loop = true;
 
@@ -112,7 +119,8 @@ export class Playhead {
     this.lastTimestamp = timestamp;
     if (!this.canAdvance()) { this.accumulator = 0; this.scheduleTick(); return; }
     this.accumulator += dt * this.speed;
-    const frameDuration = 1 / Math.max(1, this.fps);
+    const index = Math.min(this._frame, this.last - 1);
+    const frameDuration = this.times && this.last > 0 ? (this.times[index+1] - this.times[index]) / 1e6 : 1 / Math.max(1, this.fps);
     let advanced = false;
     if (this.accumulator >= frameDuration) {
       this.accumulator -= frameDuration;

@@ -60,7 +60,7 @@ export class BevTileRenderer {
   }
 
   updateView(rect: WorldRect, screenMpp: number): void {
-    if (this.disposed) return;
+    if (this.disposed || this.pyramid.singleImage) return;
     const level = this.pyramid.levelForMpp(screenMpp);
     const coords: TileCoord[] = this.pyramid.tilesForRect(rect, level);
 

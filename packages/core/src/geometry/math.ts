@@ -295,3 +295,23 @@ export function previewPose(id: string, pos: Vec3, yaw: number, preview: {
   }
   return { pos: { x, y: pos.y + preview.delta.y, z }, yaw: yaw + (preview.dyaw ?? 0) };
 }
+
+/** Full-pose source observations and yaw-only editable boxes share corner ordering. */
+export function stateBoxCorners(state: { pos: Vec3; yaw: number; size: Vec3; boxToWorld?: readonly number[] }, out: Float64Array): void {
+  if (!state.boxToWorld) { boxCorners(state.pos, state.yaw, state.size, out); return; }
+  const local = new Float64Array(24);
+  boxCorners({ x: 0, y: 0, z: 0 }, 0, state.size, local);
+  const point = { x: 0, y: 0, z: 0 };
+  for (let i = 0; i < 8; i++) {
+    transformPoint(state.boxToWorld, { x: local[i*3], y: local[i*3+1], z: local[i*3+2] }, point);
+    out.set([point.x, point.y, point.z], i*3);
+  }
+}
+export function stateBoxMatrix(state: { pos: Vec3; yaw: number; size: Vec3; boxToWorld?: readonly number[] }, out: Float32Array): void {
+  if (!state.boxToWorld) { composeBoxMatrix(state.pos, state.yaw, state.size, out); return; }
+  out.set(state.boxToWorld);
+  for (let col = 0; col < 3; col++) {
+    const scale = [state.size.x, state.size.y, state.size.z][col];
+    for (let row = 0; row < 3; row++) out[col*4+row] *= scale;
+  }
+}

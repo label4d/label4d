@@ -1,6 +1,6 @@
 # 实现架构
 
-本文描述当前 v1 实现。未来设计见 [路线图](roadmap.md)；坐标与文件约定见 [数据格式](data-formats.md)。Labelfaster 是静态数据驱动的浏览器单人标注工具，没有必需的应用后端。
+本文描述当前 v1 编辑器与规范化源观测浏览器。未来设计见 [路线图](roadmap.md)；坐标与文件约定见 [数据格式](data-formats.md)。Labelfaster 是静态数据驱动的浏览器单人标注工具，没有必需的应用后端。
 
 ## 系统与数据流
 
@@ -25,7 +25,7 @@ SelectionSet / ToolMachine / Playhead]
 快照与持久编辑记录]
 ```
 
-首页默认加载 `/kitti-camera/manifest.json`；`?manifest=...` 可指定其他实际数据集。产品不再包含合成演示或 demo 参数分支。真实数据缺失或返回非 JSON 时显示加载错误，不自动替换为合成数据。实际资源加载后尝试导入同目录的 `snapshot.json`，再启用本地持久化，恢复该序列已有标注。
+首页默认加载 `/kitti-camera/manifest.json`；`?manifest=...` 可指定其他实际数据集。产品不再包含合成演示或 demo 参数分支。真实数据缺失或返回非 JSON 时显示加载错误，不自动替换为合成数据。v1 资源加载后尝试导入同目录的 `snapshot.json`，再启用本地持久化，恢复该序列已有标注。规范化 `sequence.json` 由独立 DatasetProvider 读取，不请求 v1 快照或打开 IndexedDB。
 
 | 边界 | 代码与职责 |
 | --- | --- |
@@ -68,7 +68,7 @@ sequenceDiagram
   end
 ```
 
-相机加载失败会转为缺失图像结果，不阻塞点云成功的帧呈现；这是当前降级行为，不是所有照片必须成功的同步屏障。epoch 和缓冲代次检查阻止过时结果推进呈现。帧协调位于 `EditorSession`，没有独立的 FrameCoordinator。
+v1 相机加载失败会转为缺失图像结果，不阻塞点云成功的帧呈现。规范化源浏览采用严格屏障：点云、点属性与所有相机均成功才呈现；SHA256、图片尺寸或点序绑定失败会暂停并报告。epoch 和缓冲代次检查阻止过时结果推进呈现。帧协调位于 `EditorSession`，没有独立的 FrameCoordinator。
 
 `TileScheduler` 共享并发默认 6，管理预算默认 1.5 GiB，提供预留、固定、取消、LRU 和销毁。预算基于受管理资源估算，不等于整个浏览器或 GPU 内存上限。点云默认前取 3 帧、后取 1 帧，相机前取 1 帧。PCD 解码仍在主线程；独立 fetch/decode/upload 阶段和 Worker 尚未实现。
 
@@ -107,6 +107,30 @@ QA 是文档整体的 pending/pass/reject 状态；编辑使其失效，撤销�
 
 Potree 使用内置 UNCOMPRESSED 解码器和 HTTP Range 读取，不加载上游 Potree viewer。选择保留加性祖先样本并按视锥、投影密度和预算细化；默认上限 480,000 点。细节见 [Potree 渲染](potree-rendering.md)。
 
-当前浏览器数据适配器为 KITTI tracking；另已实现 Waymo Perception v2.0.1 的离线规范化适配器，见 [离线契约与模块图](normalized-data.md)。Waymo 尚未接入浏览器。核心保留模型辅助适配接口，UI 中的模拟预标注和合成候选生成器已移除，尚未接入训练模型。其他数据集、协作后端和性能承诺都需要独立实现与验证。
+当前浏览器数据适配器为 KITTI tracking；另已实现 Waymo Perception v2.0.1 的离线规范化适配器，见 [离线契约与模块图](normalized-data.md)。Waymo 已通过只读 DatasetProvider 接入浏览器；完整姿态编辑、撤销和新版本持久化仍待实现。核心保留模型辅助适配接口，UI 中的模拟预标注和合成候选生成器已移除，尚未接入训练模型。其他数据集、协作后端和性能承诺都需要独立实现与验证。
 
 多数据源需要的时间、传感器和共享 Python 管线演进见 [接入设计与阶段状态](multi-dataset-design.md)。
+
+## 规范化源观测浏览
+
+```mermaid
+flowchart TD
+  index[sequence.json 离线契约] --> adapter[dataset/NormalizedDataset.ts]
+  adapter --> runtime[DatasetProvider.ts<br/>browser-observations/1 描述]
+  adapter --> observations[TrackStore 源观测视图<br/>完整 boxToWorld / 精确帧存在]
+  runtime --> session[EditorSession.loadNormalized]
+  session --> buffers[FrameBuffer<br/>PCD + NPZ / 各相机 JPEG]
+  session --> clock[Playhead<br/>真实 timeMicros]
+  observations --> render[TrackInstanceRenderer / ThreeViewPanel]
+  buffers --> render
+  buffers --> camera[CameraImageView]
+  adapter --> camera
+```
+
+[DatasetProvider](../packages/core/src/dataset/DatasetProvider.ts) 是资源与观测提供接口；[NormalizedDataset](../packages/core/src/dataset/NormalizedDataset.ts) 负责契约、相对 URL、完整姿态和 Waymo 标签/源投影组件的映射。视图不包含按数据集名称分支。v1 仍走原来的 manifest 加载器，两种输入复用 EditorSession 的帧缓冲、呈现屏障与视图生命周期。内部 `browser-observations/1` 是展示描述，不是可编辑文档的序列化格式。
+
+初始化按最多 6 个并发请求读取帧 JSON，丢弃不参与展示的源字段，构造自车轨迹和实际观测索引；上限为 10,000 帧及 128 MiB JSON 字符内存估算。大型序列仍需独立可流式索引，不能把这些边界称为生产规模保证。大资源由 FrameBuffer 有界预取；只解压 NPZ 中的 `camera_projection.npy`，与 PCD 点数和 SHA256 绑定。PCD 与 NPZ 解码仍在主线程。
+
+3D、BEV、三视图和射线选框使用完整 `boxToWorld`；时间轴按真实时间显示实际观测，不填补缺帧。源观测的辅助位置/yaw 列只用于属性与时间轴展示，源状态保留完整 Float64 数值，禁止将辅助列导出为 v1。编辑工具、快照/nuScenes 导出、QA 和持久化在源浏览模式禁用，Session API 与 store 同时拒绝写入。
+
+相机使用每张照片自己的 `cameraToWorld` 与采样时间，默认绘制源 `projected_lidar_box` 的 2D 矩形，点云开关绘制官方像素引用；不绘制由静态模型近似的 3D 框。未关联当前 3D 观测的 2D 框不绘制，没有该组件时不补造矩形。滚动快门计算投影、独立 2D 标注和运动目标重投影尚未实现。

@@ -72,7 +72,7 @@ pnpm test
 
 **工具源码、测试、依赖锁文件和参考标定入 Git；原始数据、下载缓存、生成点云、LAS、Potree 与 BEV 不入 Git。** 建议用户数据输出到 `apps/web-ui/public/datasets/`，该目录已忽略。新数据可以按同样命令重新生成。
 
-目前浏览器导入支持 KITTI tracking 的上述布局；Waymo Perception v2.0.1 已有离线规范化适配器。新源不能强行压入 v1：真实时间与完整姿态使用 [规范化离线契约](../docs/normalized-data.md)，浏览器接入留到后续阶段。
+目前浏览器导入支持 KITTI tracking 的上述布局；Waymo Perception v2.0.1 已有离线规范化适配器。新源不能强行压入 v1：真实时间与完整姿态使用 [规范化离线契约](../docs/normalized-data.md)，浏览器可通过独立 provider 只读展示，完整姿态编辑仍属后续阶段。
 
 ## Waymo Perception 离线导入
 
@@ -103,7 +103,7 @@ pnpm test:tools:waymo
 
 去掉 `--frames` 导入完整片段，使用另一个输出目录。输出必须尚不存在，并且与源目录分离；临时目录中完成生成和校验后才发布，失败不会留下一个可误用的完成目录。源、输出、额外处理副本不入 Git。
 
-输出 `sequence.json`、逐帧完整位姿和框观测、原始 JPEG、世界 PCD、点属性 NPZ、过滤 BEV 和 `import-report.json`。不生成 v1 manifest 或快照，当前浏览器不能直接打开它。PCD/坐标基/BEV 复用 KITTI 的共享实现，Waymo 特有的 Parquet 和 range-image 处理在 `py/adapters/waymo.py`。
+输出 `sequence.json`、逐帧完整位姿和框观测、原始 JPEG、世界 PCD、点属性 NPZ、过滤 BEV 和 `import-report.json`。不生成 v1 manifest 或快照。浏览器打开 `/?manifest=/datasets/waymo-normalized-20/sequence.json`，以只读模式展示完整姿态与真实时间；保留 KITTI 默认入口和既有标注。PCD/坐标基/BEV 复用 KITTI 的共享实现，Waymo 特有的 Parquet 和 range-image 处理在 `py/adapters/waymo.py`。
 
 独立校验使用可选 `waymo-reference` extra 与 Python 3.11，TensorFlow 只用于官方参考计算：
 

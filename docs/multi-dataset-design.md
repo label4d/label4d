@@ -73,7 +73,7 @@ Cuboid 的 `dimensions.x` 是宽、`dimensions.y` 是长、`dimensions.z` 是高
 
 ## 运行时需要同步演进
 
-拟议统一 `DatasetProvider` 按参考时间解析资源，并返回样本引用、位姿、标定与质量标记。`EditorSession` 保持现有 requested/presented 与 epoch 机制，加载的是明确匹配的样本集合；资源键使用序列、传感器、sample 和处理版本，不能只靠 frame。
+已实现的源浏览 `DatasetProvider` 按参考时间解析资源，并返回样本引用、位姿、标定与质量标记。`EditorSession` 保持现有 requested/presented 与 epoch 机制，加载的是明确匹配的样本集合；资源键使用序列、传感器、sample 和处理版本，不能只靠 frame。
 
 需要扩展时间表、传感器样本索引和相机逐样本位姿，并在 Playhead、插值、投影、帧缓冲与导出中贯彻。不能只向 JSON 添加浏览器会忽略的字段就声明已支持。
 
@@ -83,12 +83,12 @@ Cuboid 的 `dimensions.x` 是宽、`dimensions.y` 是长、`dimensions.z` 是高
 
 ## 实施顺序与验收
 
-当前阶段 1、2：已抽取共享 PCD writer、坐标基与 BEV rasterizer，Waymo reader/decoder 位于 `adapters/`，离线交换契约与校验器已实现。KITTI 尚未整体迁移到规范化模型；独立 Writer/DatasetProvider 和浏览器扩展仍待实现。验证范围与可重复命令见 [离线契约](normalized-data.md) 与 [工具指南](../tools/README.md)。下面保留各能力的验收要求，PandaSet 在 Waymo 浏览器闭环之后实施。
+当前阶段 1、2：已抽取共享 PCD writer、坐标基与 BEV rasterizer，Waymo reader/decoder 位于 `adapters/`，离线交换契约与校验器已实现。KITTI 尚未整体迁移到规范化模型；DatasetProvider、真实时间与完整姿态只读浏览已实现；独立 Writer、完整姿态文档与编辑闭环仍待实现。验证范围与可重复命令见 [离线契约](normalized-data.md) 与 [工具指南](../tools/README.md)。下面保留各能力的验收要求，PandaSet 在 Waymo 浏览器闭环之后实施。
 
 1. **共享管线**：已抽取 PCD、坐标基和 BEV；后续继续分离 KITTI reader/writer，保持既有投影、框朝向、点数、来源与浏览器恢复回归。
-2. **时间和传感器契约**：离线契约已实现相对时间、逐样本相机位姿、能力声明和严格缺失拒绝；最近邻匹配、missing 样本与新浏览器版本仍待实现。
+2. **时间和传感器契约**：离线契约已实现相对时间、逐样本相机位姿、能力声明和严格缺失拒绝；最近邻匹配、missing 样本仍待实现；独立只读浏览描述已接入。
 3. **Waymo 小样本与完整片段**：固定格式/版本，独立官方 SDK 验证 range image、双回波、运动补偿与框八角点；先 20 帧，再完整片段。真实验证范围见 [离线契约](normalized-data.md)。
-4. **浏览器与真实编辑**：实现 DatasetProvider、真实时间与完整姿态；验证播放/跳帧、相机切换、多视图一致、跟随、修改/撤销/保存重载与按源时间导出。
+4. **浏览器与真实编辑**：DatasetProvider、真实时间与完整姿态源浏览已实现，浏览器检查播放/跳帧、相机切换和多视图资源。完整姿态修改/撤销/保存重载、按源时间导出仍待实现；当前只读模式禁用 v1 文档写入。
 5. **PandaSet 检验通用性**：选一个场景，先 10–20 帧，参考 SDK 验证框角点、投影、六相机、双雷达筛选、标签关联及世界坐标；通过后导入完整 80 帧。
 
 只有同源真实参考、独立数值检查和浏览器实际绘制都通过，才能声明接入完成。当前 KITTI 和新数据源应分别给出验证证据；内部变换自洽、演示截图或 schema 校验不能替代真实对齐。

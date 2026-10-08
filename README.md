@@ -12,9 +12,10 @@ Labelfaster combines a React/Three.js editor, a TypeScript annotation engine, an
 - Track keyframes, interpolation, object attributes, static geometry, selection and undo/redo.
 - Playback and seeking with separate requested and presented frames. Both 3D and BEV follow the ego vehicle by default.
 - Local IndexedDB persistence and JSON snapshot import/export.
-- A reusable KITTI tracking importer.
+- Reusable KITTI tracking and Waymo Perception Python importers.
+- Read-only Waymo source browsing: real timestamps, five cameras, full-pose boxes and official point pixel references.
 
-The runtime uses **v1, right-handed Y-up coordinates**. It is a local, single-editor application; a collaboration server and a new browser timestamp/pose contract are future work. A Waymo Perception v2.0.1 offline adapter produces a separate normalized contract; the browser does not consume it yet. See the [roadmap](docs/roadmap.md).
+Editable documents use **v1, right-handed Y-up coordinates**. Waymo normalized sequences use a separate, explicitly read-only browser presentation contract; they are never converted to yaw-only v1 documents. Full-pose editing and collaboration remain future work. See the [roadmap](docs/roadmap.md).
 
 ## Quick start
 
@@ -53,7 +54,9 @@ Open `/?manifest=/datasets/kitti-0004/manifest.json` on the running app. `--skip
 
 The [data-tools guide](tools/README.md) covers directory layout, downloading selected official frames, full imports, output identity and rebuilding. The [KITTI verification guide](docs/real-camera-preview.md) covers the supplied 200-frame preview.
 
-For Waymo offline import and independent SDK checks, see the [data-tools guide](tools/README.md) and [normalized contract](docs/normalized-data.md).
+Open imported Waymo data with `/?manifest=/datasets/waymo-normalized-20/sequence.json`. Playback uses source timestamps; 3D/BEV display complete box poses. Camera overlays use supplied 2D projected boxes and official point-to-pixel references, without claiming rolling-shutter reprojection. Source browsing does not write IndexedDB or export v1 snapshots.
+
+For Waymo import and independent SDK checks, see the [data-tools guide](tools/README.md) and [normalized contract](docs/normalized-data.md).
 
 Dataset downloads and generated assets are not committed. KITTI and third-party dependencies retain their own usage and license terms.
 

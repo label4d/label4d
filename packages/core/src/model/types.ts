@@ -49,6 +49,8 @@ export interface KeyframeData {
 }
 
 export interface ResolvedState {
+  /** Read-only source observation pose; never serialized into yaw-only v1. */
+  boxToWorld?: readonly number[];
   pos: Vec3;
   yaw: number;
   size: Vec3;

@@ -43,7 +43,7 @@ export function Timeline() {
       const frame = session.frame;
       const x0 = LABEL_WIDTH;
       const plot = width - x0 - 8;
-      const fx = (f: number) => x0 + (f / Math.max(1, frameCount - 1)) * plot;
+      const fx = (f: number) => x0 + session.playhead.timeAt(f) / Math.max(1e-6, session.playhead.timeAt(frameCount-1)) * plot;
 
       // ruler
       ctx.fillStyle = '#1b2733';
@@ -54,7 +54,7 @@ export function Timeline() {
       for (let f = 0; f < frameCount; f += stepFrames) {
         const x = fx(f);
         ctx.fillRect(x, 14, 1, 6);
-        ctx.fillText(String(f), x + 2, 11);
+        ctx.fillText(session.readOnly ? `${session.playhead.timeAt(f).toFixed(1)}s` : String(f), x + 2, 11);
       }
 
       // rows (virtualized)
@@ -83,7 +83,9 @@ export function Timeline() {
         ctx.globalAlpha = selected ? 0.95 : 0.45;
         const bx = fx(record.meta.startFrame);
         const bw = Math.max(2, fx(record.meta.endFrame) - bx);
-        ctx.fillRect(bx, y + 4, bw, ROW_HEIGHT - 9);
+        if (session.readOnly) {
+          for (const f of record.kf.frames) ctx.fillRect(fx(f)-1, y+4, 2, ROW_HEIGHT-9);
+        } else ctx.fillRect(bx, y + 4, bw, ROW_HEIGHT - 9);
         ctx.globalAlpha = 1;
         // keyframe diamonds
         const kf = session.store.getKeyframes(record.meta.id);
@@ -138,7 +140,10 @@ export function Timeline() {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left - LABEL_WIDTH;
     const plot = rect.width - LABEL_WIDTH - 8;
-    return Math.max(0, Math.min(session.frameCount - 1, Math.round((x / Math.max(1, plot)) * (session.frameCount - 1))));
+    const time = Math.max(0, Math.min(1, x / Math.max(1, plot))) * session.playhead.timeAt(session.frameCount-1);
+    let best = 0;
+    for (let f = 1; f < session.frameCount; f++) if (Math.abs(session.playhead.timeAt(f)-time) < Math.abs(session.playhead.timeAt(best)-time)) best = f;
+    return best;
   };
 
   return (

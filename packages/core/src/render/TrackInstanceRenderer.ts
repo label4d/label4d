@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { boxCorners, composeBoxMatrix, previewPose } from '../geometry/math';
+import { stateBoxCorners, stateBoxMatrix, previewPose } from '../geometry/math';
 import type { Vec3 } from '../geometry/math';
 import type { TrackStore } from '../model/TrackStore';
 import type { SelectionSet } from '../model/SelectionSet';
@@ -93,7 +93,7 @@ export class TrackInstanceRenderer {
       const state = this.store.resolveState(id, frame);
       if (!state) continue;
       const adjusted = this.applyPreview(id, state.pos, state.yaw);
-      composeBoxMatrix(adjusted.pos, adjusted.yaw, state.size, this.matrixScratch);
+      stateBoxMatrix({ ...state, ...adjusted }, this.matrixScratch);
       this.matrixObj.fromArray(this.matrixScratch);
       this.mesh.setMatrixAt(slot, this.matrixObj);
 
@@ -142,7 +142,8 @@ export class TrackInstanceRenderer {
       const pa = idx > 0 ? idx - 1 : idx;
       const pb = idx < kf.frames.length - 1 ? idx + 1 : idx;
       if (pa === pb) continue;
-      const dt = (kf.frames[pb] - kf.frames[pa]) / Math.max(1, this.fps);
+      if (stateGap(kf.frames[pa], frame, kf.frames[pb], this.store, id)) continue;
+      const dt = this.timeAt ? this.timeAt(kf.frames[pb]) - this.timeAt(kf.frames[pa]) : (kf.frames[pb] - kf.frames[pa]) / Math.max(1, this.fps);
       if (dt <= 0) continue;
       const ax = kf.pos[pa * 3], ay = kf.pos[pa * 3 + 1], az = kf.pos[pa * 3 + 2];
       const bx = kf.pos[pb * 3], by = kf.pos[pb * 3 + 1], bz = kf.pos[pb * 3 + 2];
@@ -173,6 +174,7 @@ export class TrackInstanceRenderer {
 
   /** sequence fps for velocity derivation (set by the view from the session) */
   fps = 10;
+  timeAt: ((frame: number) => number) | null = null;
 
   private applyPreview(id: string, pos: Vec3, yaw: number): { pos: Vec3; yaw: number } {
     return previewPose(id, pos, yaw, this.preview);
@@ -185,7 +187,7 @@ export class TrackInstanceRenderer {
       const state = this.store.resolveState(id, frame);
       if (!state) continue;
       const adjusted = this.applyPreview(id, state.pos, state.yaw);
-      boxCorners(adjusted.pos, adjusted.yaw, state.size, this.corners);
+      stateBoxCorners({ ...state, ...adjusted }, this.corners);
       for (const [a, b] of BOX_EDGES) {
         if (v + 2 > this.lineBuf.length / 3) break;
         this.lineBuf[v * 3] = this.corners[a * 3];
@@ -258,4 +260,9 @@ export class TrackInstanceRenderer {
     if (mesh.instanceColor) mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
     return mesh;
   }
+}
+
+function stateGap(a: number, frame: number, b: number, store: TrackStore, id: string): boolean {
+  if (!store.resolveState(id, frame)?.boxToWorld) return false;
+  return frame - a > 1 || b - frame > 1;
 }

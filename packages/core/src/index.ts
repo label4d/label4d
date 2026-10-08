@@ -124,3 +124,6 @@ export { IndexedDbDocumentStorage } from './persistence/DocumentStorage';
 export type { DocumentStorage, DurableEdit, StoredDocument } from './persistence/DocumentStorage';
 export { PatchCommand } from './command/PatchCommand';
 export type { StorePatch } from './model/TrackStore';
+
+export { openNormalizedDataset, datasetUrl, decodeCameraReferences } from './dataset/NormalizedDataset';
+export type { DatasetProvider, RuntimeSequence, NormalizedRuntimeSequence } from './dataset/DatasetProvider';

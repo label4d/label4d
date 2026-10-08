@@ -302,8 +302,10 @@ export class CameraImageView {
       const state = { ...resolved, ...previewPose(id, resolved.pos, resolved.yaw, preview) };
       const record = store.getTrack(id);
       // 点支撑校验：框内没有点云证据的对象不投影（避免悬空框）
-      if (this.options.minSupportPoints > 0 && this.countBoxSupport(cloud, state.pos, state.yaw, state.size) < this.options.minSupportPoints) continue;
-      const projection: BoxProjection = this.projector.projectBox(state.pos, state.yaw, state.size, frame);
+      if (!this.projector.sourceBoxes && this.options.minSupportPoints > 0 && this.countBoxSupport(cloud, state.pos, state.yaw, state.size) < this.options.minSupportPoints) continue;
+      const source = this.projector.sourceBoxes?.(frame).find((box) => box.id === id);
+      if (this.projector.sourceBoxes && !source) continue;
+      const projection: BoxProjection = source ? { hull: source.hull, pixels: [], cornerDepths: Array(8).fill(0), visible: true, minDepth: this.projector.worldToCamera(state.pos, frame).z } : this.projector.projectBox(state.pos, state.yaw, state.size, frame);
       if (!projection.visible || projection.hull.length < 6) continue;
       // 完全越界的投影不绘制
       let hMinX = Infinity, hMaxX = -Infinity, hMinY = Infinity, hMaxY = -Infinity;
@@ -336,6 +338,7 @@ export class CameraImageView {
           minY = Math.min(minY, px[c * 2 + 1]);
         }
       }
+      if (source) { minX = hMinX; minY = hMinY; }
       if (Number.isFinite(minX)) {
         labelInfos.push({
           id,
@@ -578,7 +581,15 @@ export class CameraImageView {
     const firstPass: Array<[number, number, number, number]> = [];
     for (let i = 0; i < cloud.count; i += stride) {
       const world = { x: cloud.positions[i * 3], y: cloud.positions[i * 3 + 1], z: cloud.positions[i * 3 + 2] };
-      const projected = this.projector.projectPoint(world, frame);
+      const cameraId = this.projector.sourceCameraId;
+      const refs = cloud.cameraReferences;
+      let projected;
+      if (cameraId !== null) {
+        if (!refs) continue; // never silently substitute static projection for official pixels
+        const offset = refs[i*6] === cameraId ? i*6 : refs[i*6+3] === cameraId ? i*6+3 : -1;
+        if (offset < 0) continue;
+        projected = { x: refs[offset+1], y: refs[offset+2], depth: this.projector.worldToCamera(world, frame).z, valid: true };
+      } else projected = this.projector.projectPoint(world, frame);
       if (!projected.valid) continue;
       if (projected.x < -width * 0.1 || projected.x > width * 1.1) continue;
       if (projected.y < -height * 0.1 || projected.y > height * 1.1) continue;

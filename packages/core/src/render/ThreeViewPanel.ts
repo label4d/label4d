@@ -1,13 +1,13 @@
 import { previewPose } from '../geometry/math';
 import type { InstancePreview } from './TrackInstanceRenderer';
 import * as THREE from 'three';
-import { boxCorners } from '../geometry/math';
+import { stateBoxCorners } from '../geometry/math';
 import type { Vec3 } from '../geometry/math';
 import type { TrackStore } from '../model/TrackStore';
 import type { SelectionSet } from '../model/SelectionSet';
 import type { LabelDef } from '../model/types';
 import type { PointCloudFrame } from '../io/pcd';
-import { colorForLabel, makeDynamicLines, srgbToLinear } from './shared';
+import { colorForLabel, makeDynamicLines, srgbToLinear, BOX_EDGES } from './shared';
 import type { DynamicLines } from './shared';
 
 export type ThreeViewAxis = 'top' | 'front' | 'side';
@@ -119,7 +119,7 @@ export class ThreeViewPanel {
       const resolved = store.resolveState(id, frame);
       if (!resolved) continue;
       const state = { ...resolved, ...previewPose(id, resolved.pos, resolved.yaw, preview) };
-      boxCorners(state.pos, state.yaw, state.size, this.corners);
+      stateBoxCorners(state, this.corners);
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       let depth = Infinity;
       for (let i = 0; i < 8; i++) {
@@ -139,7 +139,12 @@ export class ThreeViewPanel {
         [x1, y1, x0, y1],
         [x0, y1, x0, y0],
       ];
-      for (const [ax, ay, bx, by] of edges) {
+      const poseEdges = state.boxToWorld ? BOX_EDGES.map(([a, b]) => {
+        const pa = this.toPlane({ x: this.corners[a*3], y: this.corners[a*3+1], z: this.corners[a*3+2] });
+        const pb = this.toPlane({ x: this.corners[b*3], y: this.corners[b*3+1], z: this.corners[b*3+2] });
+        return [pa[0], pa[1], pb[0], pb[1]];
+      }) : edges;
+      for (const [ax, ay, bx, by] of poseEdges) {
         if (v + 2 > this.lineBuf.length / 3) break;
         this.lineBuf[v * 3] = ax; this.lineBuf[v * 3 + 1] = ay; this.lineBuf[v * 3 + 2] = 0.5;
         this.colorBuf[v * 3] = color.r; this.colorBuf[v * 3 + 1] = color.g; this.colorBuf[v * 3 + 2] = color.b;

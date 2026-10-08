@@ -1,6 +1,6 @@
 # 规范化离线数据契约：revision 1
 
-阶段 1、2 已实现的产物是 `sequence.json`，schema 标识为 **`labelfaster.normalized-sequence/1`**。它是离线交换契约，**不是浏览器的 v1 manifest，也不是历史 Z-up v2 fixture**。当前浏览器不会读取它，导入器不生成有损的 v1 manifest/snapshot。浏览器 DatasetProvider、真实时间播放、完整姿态编辑及计算投影属于后续阶段。
+阶段 1、2 已实现的产物是 `sequence.json`，schema 标识为 **`labelfaster.normalized-sequence/1`**。它是离线交换契约，**不是浏览器的 v1 manifest，也不是历史 Z-up v2 fixture**。浏览器现在通过独立 DatasetProvider 只读读取它，内部描述标识为 `labelfaster.browser-observations/1`。导入器不生成有损的 v1 manifest/snapshot。真实时间播放和完整姿态展示已接入；完整姿态编辑及滚动快门计算投影属于后续阶段。
 
 序列索引的机器规范见 [JSON Schema](../fixtures/schemas/normalized-sequence.v1.schema.json)，资源与跨文件约束由 [validate_normalized.py](../tools/py/validate_normalized.py) 检查。revision 1 实现完整可用样本的严格 profile：缺少必要传感器样本则拒绝导入；异步最近邻匹配、missing 样本及标定随时间变化仍需扩展契约，不能把默认行为视为已支持。
 
@@ -29,7 +29,7 @@ import-report.json            点数、耗时、相机位姿时间偏差及能�
 reference-report.json         独立参考检查成功后生成
 ```
 
-所有资源路径相对 `sequence.json` 所在目录，必须在导入目录内，禁止绝对路径、`..`、反斜杠及逃逸的符号链接。未来浏览器应将这些路径相对数据集根 URL 解析；不能沿用当前 v1 的站点根相对模板规则。
+所有资源路径相对 `sequence.json` 所在目录，必须在导入目录内，禁止绝对路径、`..`、反斜杠及逃逸的符号链接。浏览器将这些路径相对数据集根 URL 解析；不能沿用当前 v1 的站点根相对模板规则。
 
 ## 身份、时间和传感器
 
@@ -48,7 +48,7 @@ reference-report.json         独立参考检查成功后生成
 
 `boxObservations` 是每帧实际提供的标签，不生成跨缺失帧的插值或连续存在区间。尺寸为 `[length,height,width]`，局部 X/Y/Z 分别为长/高/宽。`boxToWorld` 保留完整旋转和平移，包括源车体 roll/pitch。源 objectId、类别枚举、速度、难度和点数等字段保留在观测中；不自行将 Waymo 的 VEHICLE 拆成 Car/Truck。
 
-相机同步框、2D 框、关联关系、投影框和 stats（如果提供）保存在各帧 `sourceComponents` 中，保持原始字段与身份。保留这些字段不代表浏览器已能渲染或编辑它们。
+相机同步框、2D 框、关联关系、投影框和 stats（如果提供）保存在各帧 `sourceComponents` 中，保持原始字段与身份。浏览器当前仅读取 `projected_lidar_box` 作为与当前 3D 观测关联的源 2D 矩形；其他原始组件仍只离线保留，尚不能编辑。
 
 ## 点序与属性
 
@@ -65,7 +65,7 @@ reference-report.json         独立参考检查成功后生成
 
 ## 兼容策略和验收边界
 
-当前 v1 的 `fps`、固定相机外参和 yaw-only 轨迹不足以表达本契约。正式浏览器接入需要一个明确的新运行时 schema，并让时间、样本位姿、完整框姿态贯穿加载、呈现、编辑、撤销、持久化和导出。仅给 v1 JSON 添加未知字段不能声明兼容。KITTI v1 输入与已有标注继续保留。
+当前 v1 的 `fps`、固定相机外参和 yaw-only 轨迹不足以表达本契约。浏览器使用独立 `browser-observations/1` 描述贯穿加载与呈现，并通过源观测视图保留完整姿态；完整姿态编辑、撤销、持久化和导出需要后续独立文档契约。仅给 v1 JSON 添加未知字段不能声明兼容。KITTI v1 输入与已有标注继续保留。
 
 阶段 2 检查范围：源身份、时间组、文件 SHA256、照片解码/尺寸、刚体变换、点序绑定、过滤/BEV 点数，以及独立官方 SDK 的 XYZ 对照。参考检查只对显式选择的帧执行，报告列出实际覆盖。官方 SDK 与 NumPy 使用相同源数据，但数值实现独立；不能据此声称计算相机投影、浏览器绘制、框编辑或全数据集性能已经验收。
 
@@ -82,4 +82,14 @@ reference-report.json         独立参考检查成功后生成
 | 最大 XYZ 分量误差 | 0.000003815 米 | 0.000015259 米 |
 | 最大框角点误差 | 小于 0.000000001 米 | 小于 0.000000001 米 |
 
-完整片段相机 pose 时间相对参考键的偏差为 21,306–81,697 微秒，直接证明“同帧键”不能替代图像采样时间。未验证完整 198 帧的全部 SDK 数值结果，也未验证浏览器渲染或计算相机投影。
+完整片段相机 pose 时间相对参考键的偏差为 21,306–81,697 微秒，直接证明“同帧键”不能替代图像采样时间。未验证完整 198 帧的全部 SDK 数值结果，浏览器验收另见下节；计算相机投影仍未验证。
+
+## 浏览器入口与验收
+
+导入后打开 `/?manifest=/datasets/waymo-normalized-20/sequence.json`（路径对应实际输出目录）。这是只读源观测模式，支持五相机切换、官方点像素叠加、当前帧世界点云、BEV、完整姿态框、真实时间播放与跳帧。首页继续默认 KITTI。缺失或损坏资源报告错误，不回退合成数据，也不写入已有标注文档。
+
+相机默认使用源 2D 投影框；官方像素索引只用于原始点，不能拿来投影修改后的框。当前没有滚动快门计算重投影或完整姿态编辑。架构边界与预算见 [架构文档](architecture.md)。
+
+可重复检查：`pnpm test`、`pnpm lint`、`pnpm build` 和 `pnpm --filter @labelfaster/web-ui exec playwright test --workers=2`。`normalized-source.spec.ts` 在真实 20/198 帧资产存在时检查首帧、中间帧、末帧的点数、实际观测、完整姿态、照片与采样时间，以及五相机切换、实际绘制的官方点像素、播放和视图重新挂载；缺少资产会明确跳过。SDK 数值覆盖仍以上表为准，浏览器采样验证不代表逐帧全像素或生产规模性能验收。
+
+本次实现检查：106 个核心测试与 15 个浏览器测试通过，真实 20/198 帧资源均存在，未跳过 Waymo/KITTI 浏览器覆盖。已视觉检查 3D、BEV 与照片叠加；`pnpm lint`、`pnpm build` 通过。构建仍有 bundle 大小提示，主线程解码与生产规模性能留在路线图。

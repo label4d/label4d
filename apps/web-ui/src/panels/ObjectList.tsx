@@ -32,8 +32,8 @@ export function ObjectList() {
             <Icon size={16} style={{ color: colorForLabel(session.labels, record.label) }} strokeWidth={1.7} />
             <span className="object-name">{record.label}<small>#{record.id.slice(-4)}</small></span>
             {record.source === 'model' && <span className="ai-chip">AI</span>}
-            <span className={`keyframe-dot ${record.atKeyframe ? 'is-keyframe' : ''}`} title={record.atKeyframe ? '当前帧为关键帧' : '当前帧为插值'}>◆</span>
-            <span className="object-range">{record.startFrame}–{record.endFrame}</span>
+            <span className={`keyframe-dot ${record.atKeyframe ? 'is-keyframe' : ''}`} title={session.readOnly ? '当前帧有源观测' : record.atKeyframe ? '当前帧为关键帧' : '当前帧为插值'}>◆</span>
+            <span className="object-range" title={session.readOnly ? "首末观测帧；中间可能缺失" : "存在区间"}>{record.startFrame}–{record.endFrame}</span>
           </button>
           <button className="object-visibility icon-button" aria-label={`${hidden ? '显示' : '隐藏'} ${record.label} 类别`} title="按类别切换可见性" onClick={() => session.setLabelHidden(record.label, !hidden)}>{hidden ? <EyeOff size={14} /> : <Eye size={14} />}</button>
         </div>;

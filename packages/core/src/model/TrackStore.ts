@@ -1,3 +1,4 @@
+import type { ObservationSource } from '../dataset/DatasetProvider';
 import { EventEmitter } from '../events/EventEmitter';
 import { validateAttributes, validateGeometry, validateMeta, validateState, validateTrack } from './validation';
 import { lerp, lerpYaw } from '../geometry/math';
@@ -137,6 +138,11 @@ function stateAt(kf: KeyframeData, i: number): KeyframeState {
 export class TrackStore {
   readonly events = new EventEmitter<TrackStoreEvents>();
 
+  private source: ObservationSource | null = null;
+  /** Bind immutable source observations for browsing, separately from the editable document. */
+  setObservationSource(source: ObservationSource | null): void {
+    this.source = source; this.touch(null);
+  }
   private version = 0;
   private trackMap = new Map<TrackId, TrackRecord>();
   private trackOrder: TrackId[] = [];
@@ -205,6 +211,7 @@ export class TrackStore {
   }
 
   private captureTrack(id: string): void {
+    if (this.source) throw new Error('Source observations are immutable');
     const tx = this.transaction;
     if (!tx || tx.tracks.has(id)) return;
     const record = this.trackMap.get(id);
@@ -213,6 +220,7 @@ export class TrackStore {
   }
 
   private captureGeometry(id: string): void {
+    if (this.source) throw new Error('Source observations are immutable');
     const tx = this.transaction;
     if (!tx || tx.geometries.has(id)) return;
     const record = this.geometryMap.get(id);
@@ -280,17 +288,18 @@ export class TrackStore {
   }
 
   getTrack(id: TrackId): TrackRecord | undefined {
-    return this.trackMap.get(id);
+    return this.source?.records.get(id) ?? this.trackMap.get(id);
   }
 
   listTracks(): readonly TrackRecord[] {
+    if (this.source) return [...this.source.records.values()];
     return this.trackOrder
       .map((id) => this.trackMap.get(id))
       .filter((r): r is TrackRecord => !!r);
   }
 
   get trackCount(): number {
-    return this.trackMap.size;
+    return this.source?.records.size ?? this.trackMap.size;
   }
 
   deleteTrack(id: TrackId): TrackRecord | undefined {
@@ -356,10 +365,11 @@ export class TrackStore {
   }
 
   getKeyframes(id: TrackId): KeyframeData | undefined {
-    return this.trackMap.get(id)?.kf;
+    return this.getTrack(id)?.kf;
   }
 
   resolveState(id: TrackId, frame: number): ResolvedState | null {
+    if (this.source) return this.source.states.get(id)?.get(frame) ?? null;
     const record = this.trackMap.get(id);
     if (!record) return null;
     const { meta, kf } = record;
@@ -416,6 +426,7 @@ export class TrackStore {
   }
 
   activeTrackIds(frame: number): TrackId[] {
+    if (this.source) return this.source.active[frame]?.slice() ?? [];
     if (this.intervalIndex === null) this.rebuildIntervalIndex();
     const index = this.intervalIndex;
     if (!index) return [];
@@ -471,6 +482,7 @@ export class TrackStore {
   }
 
   serializeTrack(id: TrackId): SerializedTrack | null {
+    if (this.source) throw new Error('Source observations cannot be serialized as v1 tracks');
     const record = this.trackMap.get(id);
     if (!record) return null;
     const frameAttributes: NonNullable<SerializedTrack['frameAttributes']> = [];

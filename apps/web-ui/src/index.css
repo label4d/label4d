@@ -298,3 +298,6 @@ select { min-width: 0; border: 1px solid var(--border); border-radius: 4px; padd
 .object-collapse { height: 22px; width: 22px; }
 .object-rows { max-height: 109px; }
 @media (max-height: 650px) { .rail-tool { height: 38px; } .rail-tools { gap: 2px; } .tool-rail { gap: 8px; overflow-y: auto; } .rail-history { gap: 1px; padding-top: 5px; } .rail-help { margin-top: 0; } }
+
+.camera-source-badge { position: absolute; bottom: 5px; left: 7px; z-index: 5; padding: 2px 5px; border-radius: 3px; background: #17212ce0; color: var(--text-secondary); font-size: 9px; white-space: nowrap; pointer-events: auto; }
+.camera-chrome select { min-width: 0; flex: 1; }

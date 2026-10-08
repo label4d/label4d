@@ -15,8 +15,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const manifestUrl = explicitManifest || '/kitti-camera/manifest.json';
     const next = new EditorSession();
     let active = true;
+    const startup = new AbortController();
     const removeProbe = installTestProbe(next);
-    const onPageHide = () => { active = false; next.dispose(); };
+    const onPageHide = () => { active = false; startup.abort(); next.dispose(); };
     const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) window.location.reload(); };
     window.addEventListener('pagehide', onPageHide);
     window.addEventListener('pageshow', onPageShow);
@@ -25,17 +26,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void (async () => {
       let documentLoaded = false;
       try {
-        const response = await fetch(manifestUrl);
+        const response = await fetch(manifestUrl, { signal: startup.signal });
         if (!response.ok) throw new Error(`${manifestUrl}：HTTP ${response.status}`);
         if (!response.headers.get('content-type')?.includes('application/json')) {
           throw new Error(`${manifestUrl} 未返回 JSON，请确认数据已准备且服务路径正确`);
         }
         const manifest = await response.json();
         if (!active) return;
+        if (manifest.schema === 'labelfaster.normalized-sequence/1') {
+          await next.loadNormalized(manifest, new URL(manifestUrl, window.location.href).href);
+          return;
+        }
         await next.loadManifest(manifest);
         if (!active) return;
         const snapshotUrl = new URL('snapshot.json', new URL(manifestUrl, window.location.href)).href;
-        const snapshot = await fetch(snapshotUrl);
+        const snapshot = await fetch(snapshotUrl, { signal: startup.signal });
         if (snapshot.ok && snapshot.headers.get('content-type')?.includes('application/json') && active) next.importSnapshot(await snapshot.json());
         documentLoaded = true;
         if (active) await next.enablePersistence(new IndexedDbDocumentStorage());
@@ -49,14 +54,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener('pagehide', onPageHide);
       window.removeEventListener('pageshow', onPageShow);
-      active = false; removeProbe(); next.dispose();
+      active = false; startup.abort(); removeProbe(); next.dispose();
       const debug = window as unknown as { __lf?: EditorSession };
       if (debug.__lf === next) delete debug.__lf;
     };
   }, []);
   if (startupError) return <div role="alert" className="error-banner">
     <div><b>数据加载失败</b><p>{startupError}</p>
-      <p>请先导入 KITTI 数据，或通过 manifest 参数指定已有数据集。</p>
+      <p>请先导入数据，或通过 manifest 参数指定 KITTI manifest.json / Waymo sequence.json。</p>
       <button onClick={() => window.location.reload()}>重新加载</button>
     </div>
   </div>;

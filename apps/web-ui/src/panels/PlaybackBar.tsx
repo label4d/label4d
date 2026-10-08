@@ -21,7 +21,7 @@ export function PlaybackBar() {
     <label className="frame-entry"><span>帧</span><input aria-label="跳转到帧" type="number" min={0} max={session.frameCount - 1} value={frameText ?? session.requestedFrame} onChange={(e) => setFrameText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { cancelled.current = true; setFrameText(null); e.currentTarget.blur(); } }} /><span>/ {session.frameCount - 1}</span></label>
     <input aria-label="序列帧进度" type="range" min={0} max={session.frameCount - 1} value={session.requestedFrame} className="frame-scrubber" onChange={(e) => session.setFrame(Number(e.target.value))} />
     <span className={`frame-readiness ${session.frameStatus !== 'ready' ? 'is-loading' : ''}`}>
-      {session.frameStatus === 'ready' ? `${(session.frame / (session.playhead.fps || 10)).toFixed(2)} s` : `呈现 ${session.frame} · ${session.frameStatus === 'error' ? '加载失败' : '加载中'}`}
+      {session.frameStatus === 'ready' ? `${session.playhead.timeAt(session.frame).toFixed(2)} s` : `呈现 ${session.frame} · ${session.frameStatus === 'error' ? '加载失败' : '加载中'}`}
     </span>
     {session.frameStatus === 'error' && <button className="icon-button" aria-label="重试帧" onClick={() => session.retryFrame()}><RotateCcw size={16} /></button>}
     <div className="coverage-indicator" title={`已有标注的帧占比，不代表已复核；${ds.keyframes} 个关键帧`}><span className="coverage-meter"><i style={{ width: `${ds.coverage * 100}%` }} /></span><span>覆盖 {(ds.coverage * 100).toFixed(0)}%</span><span className="muted">{ds.trackCount} 轨迹</span></div>

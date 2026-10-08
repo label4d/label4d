@@ -1,3 +1,6 @@
+import { openNormalizedDataset, checkSha256 } from '../dataset/NormalizedDataset';
+import type { DatasetProvider, RuntimeSequence } from '../dataset/DatasetProvider';
+import { mat4Invert, transformPoint } from '../geometry/math';
 import { EventEmitter } from '../events/EventEmitter';
 import { PatchCommand } from '../command/PatchCommand';
 import type { DocumentStorage, DurableEdit } from '../persistence/DocumentStorage';
@@ -53,7 +56,7 @@ export interface SessionEvents {
   qaChanged: { status: SnapshotQA['status'] };
   playbackChanged: { playing: boolean };
   saveChanged: { status: EditorSession['saveStatus']; revision: number; savedRevision: number; error?: string };
-  manifestLoaded: { manifest: SequenceManifest };
+  manifestLoaded: { manifest: RuntimeSequence };
   storeChanged: StoreChange;
   selectionChanged: { version: number };
   historyChanged: { canUndo: boolean; canRedo: boolean };
@@ -117,7 +120,7 @@ export class EditorSession {
   readonly scheduler: TileScheduler;
   readonly events = new EventEmitter<SessionEvents>();
 
-  manifest: SequenceManifest | null = null;
+  manifest: RuntimeSequence | null = null;
   labels: LabelDef[] = DEFAULT_LABELS;
   ego: EgoTrack = EgoTrack.identity(1);
   projectors = new Map<string, CameraProjector>();
@@ -140,6 +143,10 @@ export class EditorSession {
   lastMeasurement: { kind: 'distance' | 'height' | 'angle'; value: number; points: Vec3[] } | null = null;
 
   readonly cameraFrames = new Map<string, FrameBuffer<ImageBitmap | HTMLImageElement>>();
+  private dataset: DatasetProvider | null = null;
+  private datasetLoad: AbortController | null = null;
+  get readOnly(): boolean { return this.dataset !== null; }
+  cameraPoseTime(cameraId: string): number { return (this.dataset?.cameraPoseTime(cameraId, this.frame) ?? this.playhead.timeAt(this.frame) * 1e6) / 1e6; }
   private presentedFrame = 0;
   private loadEpoch = 0;
   private frameEpoch = 0;
@@ -173,6 +180,7 @@ export class EditorSession {
       },
     });
     this.history.setAtomic((fn) => {
+      if (this.readOnly) throw new Error('Source observations are read-only');
       if (this.persistenceRequired && (!this.storage || this.saveStatus === 'loading')) throw new Error('Document storage is not writable');
       this.store.atomic(fn);
     });
@@ -217,12 +225,34 @@ export class EditorSession {
   // ---- manifest / resources ----
 
   async loadManifest(input: SequenceManifest): Promise<void> {
+    this.datasetLoad?.abort(); this.datasetLoad = null;
+    await this.loadRuntime(validateManifest(input), null);
+  }
+
+  async loadNormalized(input: unknown, url: string): Promise<void> {
     if (this.history.pending) throw new Error('Wait for the current save before switching sequences');
-    const manifest = validateManifest(input);
+    this.datasetLoad?.abort();
+    const controller = new AbortController(); this.datasetLoad = controller;
     const epoch = ++this.loadEpoch;
-    this.pause(); this.tools.cancel();
+    this.frameEpoch++; this.pause(); this.tools.cancel();
+    try {
+      const dataset = await openNormalizedDataset(input, url, controller.signal);
+      if (this.disposed || epoch !== this.loadEpoch) { dataset.dispose(); return; }
+      await this.loadRuntime(dataset.description, dataset);
+    } catch (error) {
+      const obsolete = controller.signal.aborted || this.disposed;
+      controller.abort();
+      if (!obsolete) throw error;
+    } finally { if (this.datasetLoad === controller) this.datasetLoad = null; }
+  }
+
+  private async loadRuntime(manifest: RuntimeSequence, dataset: DatasetProvider | null): Promise<void> {
+    if (this.history.pending) throw new Error('Wait for the current save before switching sequences');
+    const epoch = ++this.loadEpoch;
+    this.frameEpoch++; this.pause(); this.tools.cancel();
     let ego = EgoTrack.identity(manifest.frameCount);
-    if (manifest.egoPoses) {
+    if (dataset) ego = new EgoTrack(dataset.egoPoses, manifest.frameCount);
+    else if ('egoPoses' in manifest && manifest.egoPoses) {
       let poses: unknown = manifest.egoPoses;
       if (typeof poses === 'string') {
         const data = await (this.deps.net ?? defaultNet).fetchJson(poses);
@@ -237,25 +267,34 @@ export class EditorSession {
     this.storage?.close(); this.storage = null; this.history.setCommitter(null); this.saveStatus = 'memory'; this.persistenceRequired = false;
     this.documentRevision = 0; this.savedRevision = 0;
     this.releaseResources();
+    this.dataset = dataset; this.store.setObservationSource(null);
     this.store.clear(); this.selection.clear(); this.history.clear(); this.oplog.clear();
     this.qa = { status: 'pending', notes: '' }; this.hover = null; this.hiddenLabels.clear(); this.setBlinkLabel(null);
     this.manifest = manifest; this.ego = ego;
+    this.store.setObservationSource(dataset?.observations ?? null);
     this.labels = manifest.labels?.length ? manifest.labels : DEFAULT_LABELS;
     this.playhead.fps = manifest.fps;
     this.presentedFrame = 0;
-    this.playhead.setFrameCount(manifest.frameCount); this.playhead.setFrame(0);
+    this.playhead.setFrameCount(manifest.frameCount); this.playhead.setTimeMicros(dataset?.timeMicros ?? null); this.playhead.setFrame(0);
 
     this.projectors.clear();
     for (const camera of manifest.cameras ?? []) {
-      this.projectors.set(camera.id, CameraProjector.create(camera, this.ego));
+      const projector = CameraProjector.create(camera, this.ego);
+      if (dataset) {
+        projector.poseProvider = (frame) => dataset.cameraPose(camera.id, frame);
+        projector.sourceBoxes = (frame) => dataset.cameraBoxes(camera.id, frame);
+        projector.sourceCameraId = dataset.cameraSourceId(camera.id);
+      }
+      this.projectors.set(camera.id, projector);
     }
     this.activeCameraId = manifest.cameras?.[0]?.id ?? null;
 
-    if (manifest.pointCloud) {
+    const pointCloud = 'pointCloud' in manifest ? manifest.pointCloud : null;
+    if (dataset || pointCloud) {
       this.pcdFrames = new FrameBuffer<PointCloudFrame>(
-        {
+        dataset?.cloud ?? {
           load: async (frame, signal) =>
-            parsePcd(await (this.deps.net ?? defaultNet).fetchBinary(substituteFrame(manifest.pointCloud!.urlTemplate, frame), { signal })),
+            parsePcd(await (this.deps.net ?? defaultNet).fetchBinary(substituteFrame(pointCloud!.urlTemplate, frame), { signal })),
           bytes: (item) =>
             item.positions.byteLength + (item.intensity?.byteLength ?? 0) + (item.rgb?.byteLength ?? 0),
           dispose: () => undefined, // arrays are GC-managed; GPU wrappers disposed by the view
@@ -266,7 +305,7 @@ export class EditorSession {
           windowBehind: this.deps.pointCloudWindow?.behind ?? 1,
           budgetBytes: this.deps.pointCloudWindow?.budgetBytes ?? 512 * 1024 * 1024,
           idPrefix: `${manifest.id}:load${epoch}:pcd`,
-          estimateBytes: manifest.pointCloud.approxBytesPerFrame ?? 16 * 1024 * 1024,
+          estimateBytes: pointCloud?.approxBytesPerFrame ?? 16 * 1024 * 1024,
           frameCount: manifest.frameCount,
         }
       );
@@ -276,7 +315,17 @@ export class EditorSession {
 
     for (const camera of manifest.cameras ?? []) {
       const buffer = new FrameBuffer<ImageBitmap | HTMLImageElement>(
-        { load: (frame, signal) => (this.deps.fetchImage ?? defaultFetchImage)(substituteFrame(camera.imageTemplate, frame), signal),
+        { load: async (frame, signal) => {
+            if (!dataset) return (this.deps.fetchImage ?? defaultFetchImage)(substituteFrame(camera.imageTemplate, frame), signal);
+            const response = await fetch(dataset.imageUrl(camera.id, frame), { signal });
+            if (!response.ok) throw new Error(`Camera HTTP ${response.status}`);
+            const bytes = await response.arrayBuffer(); await checkSha256(bytes, dataset.imageChecksum(camera.id, frame));
+            const image = await createImageBitmap(new Blob([bytes]), { imageOrientation: 'flipY' });
+            if (image.width !== camera.width || image.height !== camera.height || signal?.aborted) {
+              image.close(); throw new Error('Camera size mismatch or obsolete image');
+            }
+            return image;
+          },
           bytes: (image) => image.width * image.height * 4,
           dispose: (image) => { if ('close' in image) image.close(); } },
         this.scheduler,
@@ -289,11 +338,14 @@ export class EditorSession {
 
     if (manifest.bev?.tileset) {
       this.bevPyramid = new BevPyramid(manifest.bev.tileset);
+    } else if (manifest.bev?.image) {
+      const image = manifest.bev.image;
+      this.bevPyramid = new BevPyramid({ ...image, tileSize: Math.max(image.width, image.height), urlTemplate: image.url }, true);
     } else {
       this.bevPyramid = null;
     }
 
-    if (manifest.height) {
+    if ('height' in manifest && manifest.height) {
       // 单图模式: height.url + extent；瓦片模式: height.tileset
       const h = manifest.height;
       let config: TilesetConfig | undefined = h.tileset;
@@ -357,6 +409,7 @@ export class EditorSession {
   }
 
   get selectionPreview(): import('../render/TrackInstanceRenderer').InstancePreview | null {
+    if (this.readOnly) return null;
     const delta = this.tools.movePreviewDelta(), rotation = this.tools.rotatePreviewDelta();
     const ids = new Set(this.selection.all());
     if (delta) return { ids, delta };
@@ -373,7 +426,7 @@ export class EditorSession {
     for (const buffer of this.cameraFrames.values()) buffer.setFrame(frame);
     try {
       const cloud = this.pcdFrames?.ensure(frame);
-      const images = [...this.cameraFrames.values()].map((buffer) => buffer.ensure(frame).catch(() => null));
+      const images = [...this.cameraFrames.values()].map((buffer) => this.readOnly ? buffer.ensure(frame) : buffer.ensure(frame).catch(() => null));
       await Promise.all([cloud, ...images]);
       if (epoch !== this.frameEpoch || this.disposed) return;
       this.presentedFrame = frame;
@@ -565,6 +618,7 @@ export class EditorSession {
   }
 
   setTool(tool: ToolId): void {
+    if (this.readOnly && tool !== 'select' && tool !== 'measure') return;
     this.tools.setTool(tool);
   }
 
@@ -656,7 +710,14 @@ export class EditorSession {
       if (this.hiddenLabels.has(this.store.getTrack(id)?.meta.label ?? '')) continue;
       const state = this.store.resolveState(id, frame);
       if (!state) continue;
-      const t = rayOBBT(origin, dir, state.pos, state.yaw, state.size);
+      let t: number | null;
+      if (state.boxToWorld) {
+        const inv = new Float64Array(16); mat4Invert(state.boxToWorld, inv);
+        const localOrigin = vec3(), localTip = vec3();
+        transformPoint(inv, origin, localOrigin);
+        transformPoint(inv, { x: origin.x + dir.x, y: origin.y + dir.y, z: origin.z + dir.z }, localTip);
+        t = rayOBBT(localOrigin, { x: localTip.x-localOrigin.x, y: localTip.y-localOrigin.y, z: localTip.z-localOrigin.z }, vec3(), 0, state.size);
+      } else t = rayOBBT(origin, dir, state.pos, state.yaw, state.size);
       if (t !== null && (!best || t < best.t)) best = { id, t };
     }
     return best;
@@ -723,9 +784,10 @@ export class EditorSession {
     throw new Error('Terrain height is unavailable; wait for it or explicitly select the zero plane');
   }
 
-  get canEdit(): boolean { return this.frameStatus === 'ready' && !this.history.pending && this.saveStatus !== 'loading' && (!this.persistenceRequired || Boolean(this.storage)); }
+  get canEdit(): boolean { return !this.readOnly && this.frameStatus === 'ready' && !this.history.pending && this.saveStatus !== 'loading' && (!this.persistenceRequired || Boolean(this.storage)); }
 
   setQA(status: SnapshotQA['status']): void {
+    if (!this.canEdit) return;
     if (this.storage) {
       this.history.push({ name: 'set_review', payload: { status }, apply() {}, undo() {} });
     } else this.publishReview({ ...this.qa, status });
@@ -740,6 +802,7 @@ export class EditorSession {
   }
 
   async enablePersistence(storage: DocumentStorage): Promise<void> {
+    this.assertEditableFormat();
     if (!this.manifest || this.history.pending) throw new Error('Load a sequence and finish editing before opening storage');
     this.storage?.close(); this.storage = storage; this.persistenceRequired = true;
     this.saveStatus = 'loading'; this.emitSave();
@@ -820,6 +883,7 @@ export class EditorSession {
     this.pause(); this.history.push(new SetTrackMetaCommand(this.store, id, patch));
   }
   updateGeometry(id: string, patch: Partial<Omit<import('../model/types').GeometryMeta, 'id'>>): void {
+    if (!this.canEdit) return;
     this.pause(); this.history.push(new UpdateGeometryCommand(this.store, id, undefined, patch));
   }
   editKeyframe(id: TrackId, frame: number, state: KeyframeState): void {
@@ -835,6 +899,7 @@ export class EditorSession {
 
   /** Duplicate selected tracks with a lateral offset, selecting the copies. */
   duplicateSelection(offset: Vec3 = vec3(2, 0, 2)): void {
+    if (!this.canEdit) return;
     const ids = this.selection.all().filter((id) => this.store.getTrack(id));
     if (ids.length === 0) return;
     this.pause();
@@ -863,6 +928,10 @@ export class EditorSession {
   /** Dataset-level stats for the QA panel. */
   datasetStats(): { trackCount: number; keyframes: number; labeledFrames: number; coverage: number } {
     if (this.statsCache?.version === this.store.currentVersion && this.statsCache.count === this.frameCount) return this.statsCache.value;
+    if (this.dataset) {
+      const labeledFrames = this.dataset.observations.active.filter((ids) => ids.length > 0).length;
+      return { trackCount: this.store.trackCount, keyframes: this.store.listTracks().reduce((n, r) => n + r.kf.frames.length, 0), labeledFrames, coverage: labeledFrames / this.frameCount };
+    }
     const intervals = this.store.listTracks().filter((r) => r.kf.frames.length).map((r) =>
       [Math.max(0, r.meta.startFrame), Math.min(this.frameCount - 1, r.meta.endFrame)]).sort((a, b) => a[0] - b[0]);
     let labeled = 0, start = -1, end = -1;
@@ -894,7 +963,12 @@ export class EditorSession {
     this.history.redo();
   }
 
+  private assertEditableFormat(): void {
+    if (this.readOnly) throw new Error('Full-pose source observations are read-only; v1 editing, persistence and export are unavailable');
+  }
+
   exportSnapshot(): SnapshotDocument {
+    this.assertEditableFormat();
     return serializeStore(this.store, {
       sequenceId: this.manifest?.id ?? 'unknown',
       frameCount: this.frameCount,
@@ -903,6 +977,7 @@ export class EditorSession {
   }
 
   importSnapshot(doc: SnapshotDocument): void {
+    this.assertEditableFormat();
     if (this.manifest && (doc.sequenceId !== this.manifest.id || doc.frameCount !== this.frameCount)) throw new Error('Snapshot belongs to another sequence');
     this.pause(); this.tools.cancel();
     if (this.storage) {
@@ -916,6 +991,7 @@ export class EditorSession {
   }
 
   exportNuScenes(options?: NuScenesExportOptions) {
+    this.assertEditableFormat();
     return exportNuScenesAnnotations(
       this.store,
       { sequenceId: this.manifest?.id ?? 'unknown', frameCount: this.frameCount },
@@ -952,6 +1028,7 @@ export class EditorSession {
   }
 
   private releaseResources(): void {
+    this.dataset?.dispose(); this.dataset = null;
     this.pcdFrames?.dispose(); this.pcdFrames = null;
     for (const buffer of this.cameraFrames.values()) buffer.dispose();
     this.cameraFrames.clear(); this.imageFrames = null;
@@ -960,6 +1037,7 @@ export class EditorSession {
   }
 
   dispose(): void {
+    this.datasetLoad?.abort(); this.datasetLoad = null;
     this.disposed = true; this.loadEpoch++; this.frameEpoch++;
     this.storage?.close(); this.storage = null;
     this.setBlinkLabel(null); this.playhead.dispose(); this.releaseResources(); this.scheduler.dispose();

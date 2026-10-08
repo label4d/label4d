@@ -304,7 +304,7 @@ export function ThreeDView() {
         blinkOn: session.blinkOn,
         velocityIds,
       });
-      instance.fps = session.playhead.fps;
+      instance.fps = session.playhead.fps; instance.timeAt = (frame) => session.playhead.timeAt(frame);
       instance.sync(frame, session.hover);
       badges.sync(frame, session.store, session.selection, session.hover);
       // 当前帧轨迹标记高亮

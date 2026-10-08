@@ -13,10 +13,11 @@ export const TOOLS = [
 
 export function ToolRail({ onHelp }: { onHelp: () => void }) {
   const session = useSession();
-  useSessionTick(['toolChanged', 'historyChanged', 'saveChanged', 'frameStatusChanged']);
+  useSessionTick(['manifestLoaded', 'toolChanged', 'historyChanged', 'saveChanged', 'frameStatusChanged']);
   return <nav className="tool-rail" aria-label="标注工具">
     <div className="rail-tools">{TOOLS.map((tool, index) => <button key={tool.id}
       className={`rail-tool ${session.tools.activeTool === tool.id ? 'is-active' : ''}`}
+      disabled={session.readOnly && tool.id !== 'select' && tool.id !== 'measure'}
       aria-label={tool.label} aria-pressed={session.tools.activeTool === tool.id}
       title={`${tool.label} · ${tool.hint} (${index + 1})`} onClick={() => session.setTool(tool.id)}>
       <tool.icon size={20} strokeWidth={1.6} /><span>{tool.label}</span><small>{index + 1}</small>

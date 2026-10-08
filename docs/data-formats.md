@@ -1,6 +1,6 @@
 # v1 数据格式与坐标
 
-Waymo 离线适配器输出独立的 `labelfaster.normalized-sequence/1` 契约，见 [规范化离线数据](normalized-data.md)。它保留真实时间与完整姿态，不属于这里的运行时 v1，不能把 `sequence.json` 当作 manifest 加载。
+Waymo 离线适配器输出独立的 `labelfaster.normalized-sequence/1` 契约，见 [规范化离线数据](normalized-data.md)。它保留真实时间与完整姿态，不属于这里的运行时 v1，浏览器通过独立的 DatasetProvider 读取 `sequence.json`，不会将它传给 v1 manifest 校验器；打开方式与边界见该文档。
 
 运行时契约定义在 [manifest.ts](../packages/core/src/io/manifest.ts)、[snapshot.ts](../packages/core/src/io/snapshot.ts) 和 [模型类型](../packages/core/src/model/types.ts)。本文说明当前格式；`fixtures/schemas/manifest.v2.schema.json` 是历史 fixture 规范，不能作为运行时 manifest 使用。
 

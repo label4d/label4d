@@ -3,6 +3,8 @@ export interface PointCloudFrame {
   intensity: Float32Array | null;
   /** per-point RGB, 3 bytes/point (0-255), null when the cloud has no color */
   rgb: Uint8Array | null;
+  /** Official source point-to-pixel references: two (cameraId,u,v) triples per point. */
+  cameraReferences?: Int32Array;
   count: number;
 }
 

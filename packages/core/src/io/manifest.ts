@@ -89,7 +89,7 @@ export function parseEgoPoses(data: unknown, frameCount: number): Float64Array |
   return out;
 }
 
-function validTransform(m: unknown): m is number[] {
+export function validTransform(m: unknown): m is number[] {
   if (!Array.isArray(m) || m.length !== 16 || !m.every(Number.isFinite)) return false;
   if (Math.abs(m[3]) + Math.abs(m[7]) + Math.abs(m[11]) + Math.abs(m[15] - 1) > 1e-5) return false;
   const det = m[0] * (m[5] * m[10] - m[9] * m[6]) - m[4] * (m[1] * m[10] - m[9] * m[2]) + m[8] * (m[1] * m[6] - m[5] * m[2]);

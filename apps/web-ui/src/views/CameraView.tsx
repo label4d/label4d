@@ -66,6 +66,7 @@ export function CameraView({ index = 0 }: { index?: number }) {
       else session.selection.clear();
     };
     const onDoubleClick = (e: MouseEvent) => {
+      if (session.readOnly) return;
       const px = toImagePx(e);
       if (!px) return;
       const hit = view.pick(px.x, px.y);
@@ -199,6 +200,7 @@ export function CameraView({ index = 0 }: { index?: number }) {
         </select>
         <label className="camera-cloud-toggle"><input type="checkbox" checked={cloudProjection} onChange={(e) => { setCloudProjection(e.target.checked); projectionRef.current = e.target.checked; viewRef.current?.setOptions({ cloudProjection: e.target.checked }); }} />点云投影</label>
       </div>
+      {session.readOnly && <span className="camera-source-badge" title="源 2D 投影框；点云使用官方点像素索引，未实现滚动快门计算投影">源投影 · {session.cameraPoseTime(cameraId ?? cameras[Math.min(index, cameras.length - 1)]).toFixed(3)} s</span>}
       {session.frameStatus === 'ready' && !session.currentCameraImage(cameraId ?? cameras[Math.min(index, cameras.length - 1)]) && <div className="camera-empty">当前帧无相机图像</div>}
 
       {editor && editorTrack && (
