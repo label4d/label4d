@@ -1,4 +1,5 @@
-import { openNormalizedDataset, checkSha256 } from '../dataset/NormalizedDataset';
+import { openManifestDataset } from '../dataset/ManifestDataset';
+import { openNormalizedDataset } from '../dataset/NormalizedDataset';
 import type { DatasetProvider, RuntimeSequence } from '../dataset/DatasetProvider';
 import { mat4Invert, transformPoint } from '../geometry/math';
 import { EventEmitter } from '../events/EventEmitter';
@@ -39,9 +40,7 @@ import { HeightField } from '../stream/HeightField';
 import type { ImageFetcher, ImageDecoder } from '../stream/HeightField';
 import { PotreeOverlay, potreeUncompressedDecoder } from '../stream/PotreeOverlay';
 import type { PotreeDecoder, NetClient } from '../stream/PotreeOverlay';
-import { parsePcd } from '../io/pcd';
 import type { PointCloudFrame } from '../io/pcd';
-import { substituteFrame, validateManifest, parseEgoPoses } from '../io/manifest';
 import type { SequenceManifest, TilesetConfig } from '../io/manifest';
 import { applySnapshot, serializeStore } from '../io/snapshot';
 import type { SnapshotDocument, SnapshotQA } from '../io/snapshot';
@@ -145,7 +144,8 @@ export class EditorSession {
   readonly cameraFrames = new Map<string, FrameBuffer<ImageBitmap | HTMLImageElement>>();
   private dataset: DatasetProvider | null = null;
   private datasetLoad: AbortController | null = null;
-  get readOnly(): boolean { return this.dataset !== null; }
+  get datasetCapabilities() { return this.dataset?.capabilities ?? null; }
+  get readOnly(): boolean { return this.dataset?.capabilities.editing === false; }
   cameraPoseTime(cameraId: string): number { return (this.dataset?.cameraPoseTime(cameraId, this.frame) ?? this.playhead.timeAt(this.frame) * 1e6) / 1e6; }
   private presentedFrame = 0;
   private loadEpoch = 0;
@@ -225,18 +225,23 @@ export class EditorSession {
   // ---- manifest / resources ----
 
   async loadManifest(input: SequenceManifest): Promise<void> {
-    this.datasetLoad?.abort(); this.datasetLoad = null;
-    await this.loadRuntime(validateManifest(input), null);
+    await this.openDataset((signal) => openManifestDataset(input, {
+      net: this.deps.net ?? defaultNet, fetchImage: this.deps.fetchImage ?? defaultFetchImage,
+    }, signal));
   }
 
   async loadNormalized(input: unknown, url: string): Promise<void> {
+    await this.openDataset((signal) => openNormalizedDataset(input, url, signal));
+  }
+
+  private async openDataset(open: (signal: AbortSignal) => Promise<DatasetProvider>): Promise<void> {
     if (this.history.pending) throw new Error('Wait for the current save before switching sequences');
     this.datasetLoad?.abort();
     const controller = new AbortController(); this.datasetLoad = controller;
     const epoch = ++this.loadEpoch;
     this.frameEpoch++; this.pause(); this.tools.cancel();
     try {
-      const dataset = await openNormalizedDataset(input, url, controller.signal);
+      const dataset = await open(controller.signal);
       if (this.disposed || epoch !== this.loadEpoch) { dataset.dispose(); return; }
       await this.loadRuntime(dataset.description, dataset);
     } catch (error) {
@@ -246,22 +251,11 @@ export class EditorSession {
     } finally { if (this.datasetLoad === controller) this.datasetLoad = null; }
   }
 
-  private async loadRuntime(manifest: RuntimeSequence, dataset: DatasetProvider | null): Promise<void> {
+  private async loadRuntime(manifest: RuntimeSequence, dataset: DatasetProvider): Promise<void> {
     if (this.history.pending) throw new Error('Wait for the current save before switching sequences');
     const epoch = ++this.loadEpoch;
     this.frameEpoch++; this.pause(); this.tools.cancel();
-    let ego = EgoTrack.identity(manifest.frameCount);
-    if (dataset) ego = new EgoTrack(dataset.egoPoses, manifest.frameCount);
-    else if ('egoPoses' in manifest && manifest.egoPoses) {
-      let poses: unknown = manifest.egoPoses;
-      if (typeof poses === 'string') {
-        const data = await (this.deps.net ?? defaultNet).fetchJson(poses);
-        poses = data && typeof data === 'object' && 'poses' in data ? (data as { poses: unknown }).poses : data;
-      }
-      const parsed = parseEgoPoses(poses, manifest.frameCount);
-      if (!parsed) throw new Error('Invalid or incomplete ego trajectory');
-      ego = new EgoTrack(parsed, manifest.frameCount);
-    }
+    const ego = new EgoTrack(dataset.egoPoses, manifest.frameCount);
     if (epoch !== this.loadEpoch || this.disposed) return;
     this.frameEpoch++;
     this.storage?.close(); this.storage = null; this.history.setCommitter(null); this.saveStatus = 'memory'; this.persistenceRequired = false;
@@ -271,34 +265,29 @@ export class EditorSession {
     this.store.clear(); this.selection.clear(); this.history.clear(); this.oplog.clear();
     this.qa = { status: 'pending', notes: '' }; this.hover = null; this.hiddenLabels.clear(); this.setBlinkLabel(null);
     this.manifest = manifest; this.ego = ego;
-    this.store.setObservationSource(dataset?.observations ?? null);
+    this.store.setObservationSource(dataset.observations);
     this.labels = manifest.labels?.length ? manifest.labels : DEFAULT_LABELS;
     this.playhead.fps = manifest.fps;
     this.presentedFrame = 0;
-    this.playhead.setFrameCount(manifest.frameCount); this.playhead.setTimeMicros(dataset?.timeMicros ?? null); this.playhead.setFrame(0);
+    this.playhead.setFrameCount(manifest.frameCount); this.playhead.setTimeMicros(dataset.timeMicros); this.playhead.setFrame(0);
 
     this.projectors.clear();
     for (const camera of manifest.cameras ?? []) {
       const projector = CameraProjector.create(camera, this.ego);
-      if (dataset) {
-        projector.poseProvider = (frame) => dataset.cameraPose(camera.id, frame);
-        projector.sourceBoxes = (frame) => dataset.cameraBoxes(camera.id, frame);
-        projector.sourceCameraId = dataset.cameraSourceId(camera.id);
+      projector.poseProvider = (frame) => dataset.cameraPose(camera.id, frame);
+      if (dataset.sourceProjection) {
+        const projection = dataset.sourceProjection;
+        projector.sourceBoxes = (frame) => projection.cameraBoxes(camera.id, frame);
+        projector.sourceCameraId = projection.cameraSourceId(camera.id);
       }
       this.projectors.set(camera.id, projector);
     }
     this.activeCameraId = manifest.cameras?.[0]?.id ?? null;
 
     const pointCloud = 'pointCloud' in manifest ? manifest.pointCloud : null;
-    if (dataset || pointCloud) {
+    if (dataset.cloud) {
       this.pcdFrames = new FrameBuffer<PointCloudFrame>(
-        dataset?.cloud ?? {
-          load: async (frame, signal) =>
-            parsePcd(await (this.deps.net ?? defaultNet).fetchBinary(substituteFrame(pointCloud!.urlTemplate, frame), { signal })),
-          bytes: (item) =>
-            item.positions.byteLength + (item.intensity?.byteLength ?? 0) + (item.rgb?.byteLength ?? 0),
-          dispose: () => undefined, // arrays are GC-managed; GPU wrappers disposed by the view
-        },
+        dataset.cloud,
         this.scheduler,
         {
           windowAhead: this.deps.pointCloudWindow?.ahead ?? 3,
@@ -315,19 +304,7 @@ export class EditorSession {
 
     for (const camera of manifest.cameras ?? []) {
       const buffer = new FrameBuffer<ImageBitmap | HTMLImageElement>(
-        { load: async (frame, signal) => {
-            if (!dataset) return (this.deps.fetchImage ?? defaultFetchImage)(substituteFrame(camera.imageTemplate, frame), signal);
-            const response = await fetch(dataset.imageUrl(camera.id, frame), { signal });
-            if (!response.ok) throw new Error(`Camera HTTP ${response.status}`);
-            const bytes = await response.arrayBuffer(); await checkSha256(bytes, dataset.imageChecksum(camera.id, frame));
-            const image = await createImageBitmap(new Blob([bytes]), { imageOrientation: 'flipY' });
-            if (image.width !== camera.width || image.height !== camera.height || signal?.aborted) {
-              image.close(); throw new Error('Camera size mismatch or obsolete image');
-            }
-            return image;
-          },
-          bytes: (image) => image.width * image.height * 4,
-          dispose: (image) => { if ('close' in image) image.close(); } },
+        dataset.image(camera.id),
         this.scheduler,
         { windowAhead: 1, windowBehind: 0, budgetBytes: 128 * 1024 * 1024,
           estimateBytes: camera.width * camera.height * 4, idPrefix: `${manifest.id}:load${epoch}:camera:${camera.id}`, frameCount: manifest.frameCount }
@@ -426,7 +403,7 @@ export class EditorSession {
     for (const buffer of this.cameraFrames.values()) buffer.setFrame(frame);
     try {
       const cloud = this.pcdFrames?.ensure(frame);
-      const images = [...this.cameraFrames.values()].map((buffer) => this.readOnly ? buffer.ensure(frame) : buffer.ensure(frame).catch(() => null));
+      const images = [...this.cameraFrames.values()].map((buffer) => this.dataset?.capabilities.imageFailure === 'required' ? buffer.ensure(frame) : buffer.ensure(frame).catch(() => null));
       await Promise.all([cloud, ...images]);
       if (epoch !== this.frameEpoch || this.disposed) return;
       this.presentedFrame = frame;
@@ -928,7 +905,7 @@ export class EditorSession {
   /** Dataset-level stats for the QA panel. */
   datasetStats(): { trackCount: number; keyframes: number; labeledFrames: number; coverage: number } {
     if (this.statsCache?.version === this.store.currentVersion && this.statsCache.count === this.frameCount) return this.statsCache.value;
-    if (this.dataset) {
+    if (this.dataset?.observations) {
       const labeledFrames = this.dataset.observations.active.filter((ids) => ids.length > 0).length;
       return { trackCount: this.store.trackCount, keyframes: this.store.listTracks().reduce((n, r) => n + r.kf.frames.length, 0), labeledFrames, coverage: labeledFrames / this.frameCount };
     }

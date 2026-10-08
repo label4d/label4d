@@ -189,7 +189,7 @@ const tmpPoint: Vec3 = { x: 0, y: 0, z: 0 };
 
 export class CameraProjector {
   /** Optional per-image world pose and official reference overlays. */
-  poseProvider: ((frame: number) => readonly number[]) | null = null;
+  poseProvider: ((frame: number) => ArrayLike<number>) | null = null;
   sourceBoxes: ((frame: number) => readonly SourceRectangle[]) | null = null;
   sourceCameraId: number | null = null;
   private cachedFrame = -1;

@@ -30,7 +30,7 @@ Waymo 离线适配器输出独立的 `labelfaster.normalized-sequence/1` 契约�
 }
 ```
 
-`{frame}` 替换为未补零的十进制帧号。URL 由资源加载器按浏览器 URL 规则获取，不自动以 manifest 所在目录为基址；建议生成站点根相对 URL 或绝对 URL。跨 origin 资源需适当的 CORS；Potree 服务还需支持字节 Range 请求。
+`{frame}` 替换为未补零的十进制帧号。v1 的 ManifestDataset 资源适配器按浏览器 URL 规则获取 URL，不自动以 manifest 所在目录为基址；建议生成站点根相对 URL 或绝对 URL。跨 origin 资源需适当的 CORS；Potree 服务还需支持字节 Range 请求。
 
 | 可选字段 | 约定 |
 | --- | --- |

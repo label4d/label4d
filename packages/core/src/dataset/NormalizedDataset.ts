@@ -189,13 +189,30 @@ export async function openNormalizedDataset(input: unknown, sequenceUrl: string,
     labels, potree: s.potree ? { url: datasetUrl(root, s.potree.path) } : undefined, bev: { image: { ...b, url: datasetUrl(root, b.path) } }, cameras: cameras.map((a) => ({ id: a.id, model: 'pinhole', width: a.width!, height: a.height!, intrinsics: { fx: a.intrinsics![0], fy: a.intrinsics![1], cx: a.intrinsics![2], cy: a.intrinsics![3] }, distortion: a.distortion, cameraToEgo: a.sensorToEgo, imageTemplate: '' })) };
   let disposed = false;
   const cameraSample = (id: string, frame: number) => frames[frame].samples.find((a) => a.sensorId === id)!;
-  return { description, timeMicros, egoPoses, observations,
+  return { description, capabilities: { editing: false, projection: 'source-references', imageFailure: 'required' }, timeMicros, egoPoses, observations,
     imageUrl: (id, frame) => datasetUrl(root, cameraSample(id, frame).image),
-    imageChecksum: (id, frame) => cameraSample(id, frame).imageSha256,
-    cameraSourceId: (id) => cameras.find((a) => a.id === id)!.sourceId,
+    image: (id) => ({
+      load: async (frame, loadSignal) => {
+        requireValid(!disposed, 'provider disposed');
+        const sample = cameraSample(id, frame);
+        const response = await fetch(datasetUrl(root, sample.image), { signal: loadSignal });
+        requireValid(response.ok, `Camera HTTP ${response.status}`);
+        const bytes = await response.arrayBuffer(); await checkSha256(bytes, sample.imageSha256);
+        requireValid(!disposed && !loadSignal?.aborted, 'obsolete resource');
+        const image = await createImageBitmap(new Blob([bytes]), { imageOrientation: 'flipY' });
+        const config = cameras.find((c) => c.id === id)!;
+        if (image.width !== config.width || image.height !== config.height || disposed || loadSignal?.aborted) {
+          image.close(); throw new Error('Camera size mismatch or obsolete image');
+        }
+        return image;
+      },
+      bytes: (image) => image.width * image.height * 4,
+      dispose: (image) => { if ('close' in image) image.close(); },
+    }),
     cameraPose: (id, frame) => cameraSample(id, frame).cameraToWorld,
     cameraPoseTime: (id, frame) => cameraSample(id, frame).poseTimeMicros,
-    cameraBoxes: (id, frame) => rectangles[frame].get(id) ?? [],
+    sourceProjection: { cameraSourceId: (id) => cameras.find((a) => a.id === id)!.sourceId,
+      cameraBoxes: (id, frame) => rectangles[frame].get(id) ?? [] },
     cloud: { load: async (frame, loadSignal) => {
       requireValid(!disposed, 'provider disposed');
       const pc = frames[frame].pointCloud;

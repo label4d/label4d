@@ -11,7 +11,9 @@ flowchart LR
 manifest / snapshot / PCD / 图片 / BEV / Potree]
   assets --> provider[SessionProvider
 加载与资源提供器]
-  provider --> session[EditorSession]
+  provider --> adapters[ManifestDataset / NormalizedDataset]
+  adapters --> dataset[DatasetProvider 资源与能力]
+  dataset --> session[EditorSession]
   session --> resources[FrameBuffer / TileScheduler
 PotreeOverlay / BevPyramid]
   resources --> assets
@@ -25,11 +27,12 @@ SelectionSet / ToolMachine / Playhead]
 快照与持久编辑记录]
 ```
 
-首页默认加载 `/kitti-camera/manifest.json`；`?manifest=...` 可指定其他实际数据集。产品不再包含合成演示或 demo 参数分支。真实数据缺失或返回非 JSON 时显示加载错误，不自动替换为合成数据。v1 资源加载后尝试导入同目录的 `snapshot.json`，再启用本地持久化，恢复该序列已有标注。规范化 `sequence.json` 由独立 DatasetProvider 读取，不请求 v1 快照或打开 IndexedDB。
+首页默认加载 `/kitti-camera/manifest.json`；`?manifest=...` 可指定其他实际数据集。产品不再包含合成演示或 demo 参数分支。真实数据缺失或返回非 JSON 时显示加载错误，不自动替换为合成数据。v1 资源加载后尝试导入同目录的 `snapshot.json`，再启用本地持久化，恢复该序列已有标注。两种输入都通过 DatasetProvider 提供资源；规范化 `sequence.json` 不请求 v1 快照或打开 IndexedDB。
 
 | 边界 | 代码与职责 |
 | --- | --- |
 | 应用 | [apps/web-ui/src](../apps/web-ui/src)：React 面板、快捷键、视口生命周期和会话订阅 |
+| 数据适配 | [dataset](../packages/core/src/dataset)：v1 ManifestDataset 与规范化 NormalizedDataset，共用资源和能力接口 |
 | 组合根 | [EditorSession](../packages/core/src/session/EditorSession.ts)：编辑、帧呈现、资源、投影、保存状态 |
 | 领域模型 | [model](../packages/core/src/model)：稀疏轨迹关键帧、属性、静态几何、选择与校验 |
 | 编辑 | [command](../packages/core/src/command)：命令、原子事务、补丁、撤销/重做；OpLog 记录操作 |
@@ -107,27 +110,33 @@ QA 是文档整体的 pending/pass/reject 状态；编辑使其失效，撤销�
 
 Potree 使用内置 UNCOMPRESSED 解码器和 HTTP Range 读取，不加载上游 Potree viewer。选择保留加性祖先样本并按视锥、投影密度和预算细化；默认上限 480,000 点。细节见 [Potree 渲染](potree-rendering.md)。
 
-当前浏览器数据适配器为 KITTI tracking；另已实现 Waymo Perception v2.0.1 的离线规范化适配器，见 [离线契约与模块图](normalized-data.md)。Waymo 已通过只读 DatasetProvider 接入浏览器；完整姿态编辑、撤销和新版本持久化仍待实现。核心保留模型辅助适配接口，UI 中的模拟预标注和合成候选生成器已移除，尚未接入训练模型。其他数据集、协作后端和性能承诺都需要独立实现与验证。
+当前浏览器通过 ManifestDataset 接入 KITTI tracking 的 v1 输出，通过 NormalizedDataset 接入 Waymo Perception v2.0.1 的规范化输出，见 [离线契约与模块图](normalized-data.md)。Waymo 已通过只读 DatasetProvider 接入浏览器；完整姿态编辑、撤销和新版本持久化仍待实现。核心保留模型辅助适配接口，UI 中的模拟预标注和合成候选生成器已移除，尚未接入训练模型。其他数据集、协作后端和性能承诺都需要独立实现与验证。
 
 多数据源需要的时间、传感器和共享 Python 管线演进见 [接入设计与阶段状态](multi-dataset-design.md)。
 
-## 规范化源观测浏览
+## 统一数据提供与源观测浏览
 
 ```mermaid
 flowchart TD
   index[sequence.json 离线契约] --> adapter[dataset/NormalizedDataset.ts]
-  adapter --> runtime[DatasetProvider.ts<br/>browser-observations/1 描述]
+  manifest[manifest.json v1] --> legacy[dataset/ManifestDataset.ts]
+  legacy --> runtime[DatasetProvider.ts<br/>资源 / 能力 / 运行时描述]
+  adapter --> runtime
   adapter --> observations[TrackStore 源观测视图<br/>完整 boxToWorld / 精确帧存在]
-  runtime --> session[EditorSession.loadNormalized]
-  session --> buffers[FrameBuffer<br/>PCD + NPZ / 各相机 JPEG]
-  session --> clock[Playhead<br/>真实 timeMicros]
+  runtime --> session[EditorSession.openDataset / loadRuntime]
+  session --> buffers[FrameBuffer<br/>PCD / 可选 NPZ / 相机图片]
+  session --> clock[Playhead<br/>FPS 或真实 timeMicros]
   observations --> render[TrackInstanceRenderer / ThreeViewPanel]
   buffers --> render
   buffers --> camera[CameraImageView]
   adapter --> camera
 ```
 
-[DatasetProvider](../packages/core/src/dataset/DatasetProvider.ts) 是资源与观测提供接口；[NormalizedDataset](../packages/core/src/dataset/NormalizedDataset.ts) 负责契约、相对 URL、完整姿态和 Waymo 标签/源投影组件的映射。视图不包含按数据集名称分支。v1 仍走原来的 manifest 加载器，两种输入复用 EditorSession 的帧缓冲、呈现屏障与视图生命周期。内部 `browser-observations/1` 是展示描述，不是可编辑文档的序列化格式。
+[DatasetProvider](../packages/core/src/dataset/DatasetProvider.ts) 是资源与观测提供接口；[NormalizedDataset](../packages/core/src/dataset/NormalizedDataset.ts) 负责契约、相对 URL、完整姿态和 Waymo 标签/源投影组件的映射。视图不包含按数据集名称分支。v1 由 [ManifestDataset](../packages/core/src/dataset/ManifestDataset.ts) 校验并提供资源；两种输入都通过统一 openDataset / loadRuntime 生命周期接入 EditorSession，不再在会话中分别解析 PCD 或加载相机图片。内部 `browser-observations/1` 是展示描述，不是可编辑文档的序列化格式。
+
+接口统一 `cloud`、`image(cameraId)`、`egoPoses`、`cameraPose`、采样时间和可选源观测。Provider 负责 URL、解码、校验和迟到图片释放；FrameBuffer 负责有界缓存和呈现帧固定。`capabilities.editing` 决定文档编辑权限，`projection` 区分标定计算与源引用，`imageFailure` 决定照片是否为呈现屏障的必需资源。视图消费 session 的能力与已呈现资源，不判断数据集名称。
+
+KITTI 保留 v1 ID、URL 模板、FPS 时钟、标定投影和既有照片失败容忍策略；相机世界位姿由逐帧自车位姿乘相机外参得到。快照导入、命令、撤销、IndexedDB 恢复仍在文档层。Waymo 使用真实微秒时间和每张照片自己的位姿，要求当前帧所有照片与点云成功加载，保持只读源观测和官方像素引用。统一 Provider 不意味着统一源数据语义或文档格式。
 
 初始化按最多 6 个并发请求读取帧 JSON，丢弃不参与展示的源字段，构造自车轨迹和实际观测索引；上限为 10,000 帧及 128 MiB JSON 字符内存估算。大型序列仍需独立可流式索引，不能把这些边界称为生产规模保证。大资源由 FrameBuffer 有界预取；只解压 NPZ 中的 `camera_projection.npy`，与 PCD 点数和 SHA256 绑定。PCD 与 NPZ 解码仍在主线程。
 

@@ -25,17 +25,27 @@ export interface ObservationSource {
 }
 
 export interface SourceRectangle { id: string; hull: number[] }
+export interface DatasetCapabilities {
+  editing: boolean;
+  projection: 'calibrated' | 'source-references';
+  imageFailure: 'optional' | 'required';
+}
+export type DatasetImage = ImageBitmap | HTMLImageElement;
+
 export interface DatasetProvider {
-  readonly description: NormalizedRuntimeSequence;
-  readonly timeMicros: readonly number[];
+  readonly description: RuntimeSequence;
+  readonly capabilities: DatasetCapabilities;
+  readonly timeMicros: readonly number[] | null;
   readonly egoPoses: Float64Array;
-  readonly observations: ObservationSource;
-  readonly cloud: FrameProvider<PointCloudFrame>;
+  readonly observations: ObservationSource | null;
+  readonly cloud: FrameProvider<PointCloudFrame> | null;
+  image(cameraId: string): FrameProvider<DatasetImage>;
   imageUrl(cameraId: string, frame: number): string;
-  imageChecksum(cameraId: string, frame: number): string;
-  cameraSourceId(cameraId: string): number;
-  cameraPose(cameraId: string, frame: number): readonly number[];
+  cameraPose(cameraId: string, frame: number): ArrayLike<number>;
   cameraPoseTime(cameraId: string, frame: number): number;
-  cameraBoxes(cameraId: string, frame: number): readonly SourceRectangle[];
+  readonly sourceProjection: {
+    cameraSourceId(cameraId: string): number;
+    cameraBoxes(cameraId: string, frame: number): readonly SourceRectangle[];
+  } | null;
   dispose(): void;
 }

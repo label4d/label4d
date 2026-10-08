@@ -12,6 +12,7 @@ Inspect `git status` before editing. Preserve unrelated work and saved annotatio
 
 - `apps/web-ui` owns React components and viewport integration. Route annotation edits through `EditorSession`, commands and `History`; do not mutate store arrays from UI handlers.
 - `packages/core/src/model`, `command`, `geometry` and `projection` contain domain logic and math. Keep them independent of React and browser UI. Three.js adapters live in `render`; `stream/PotreeSelection.ts` also uses Three.js for view-dependent selection.
+- `dataset/ManifestDataset.ts` (v1/KITTI) and `dataset/NormalizedDataset.ts` (Waymo source) implement the shared DatasetProvider resource interface. Keep source URL/decoding/validation in providers; use explicit capabilities for editing, projection and image-loading requirements, never dataset-name branches in views.
 - `EditorSession` owns document editing, presentation coordination and resource providers. Selection, hover, navigation and tool previews are session state, not durable annotation edits.
 - Offline dataset transforms and numeric processing belong in `tools/py` using Python/NumPy. Reuse the importer and BEV pipeline instead of adding JavaScript duplicates. `scripts` is for orchestration and engineering checks.
 

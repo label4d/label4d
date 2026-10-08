@@ -13,6 +13,7 @@ Labelfaster combines a React/Three.js editor, a TypeScript annotation engine, an
 - Playback and seeking with separate requested and presented frames. Both 3D and BEV follow the ego vehicle by default.
 - Local IndexedDB persistence and JSON snapshot import/export.
 - Reusable KITTI tracking and Waymo Perception Python importers.
+- Shared DatasetProvider resources for KITTI and Waymo, with explicit editing, projection and image-loading capabilities.
 - Read-only Waymo source browsing: real timestamps, five cameras, full-pose boxes and official point pixel references.
 
 Editable documents use **v1, right-handed Y-up coordinates**. Waymo normalized sequences use a separate, explicitly read-only browser presentation contract; they are never converted to yaw-only v1 documents. Full-pose editing and collaboration remain future work. See the [roadmap](docs/roadmap.md).

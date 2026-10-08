@@ -126,4 +126,5 @@ export { PatchCommand } from './command/PatchCommand';
 export type { StorePatch } from './model/TrackStore';
 
 export { openNormalizedDataset, datasetUrl, decodeCameraReferences } from './dataset/NormalizedDataset';
-export type { DatasetProvider, RuntimeSequence, NormalizedRuntimeSequence } from './dataset/DatasetProvider';
+export { openManifestDataset } from './dataset/ManifestDataset';
+export type { DatasetProvider, DatasetCapabilities, DatasetImage, RuntimeSequence, NormalizedRuntimeSequence } from './dataset/DatasetProvider';

@@ -1,10 +1,10 @@
 # 多数据源接入设计与阶段状态
 
-浏览器演进部分仍是接入方案。阶段 1、2 已实现独立的规范化离线契约、Waymo Python 适配器和参考校验器，见 [规范化离线数据](normalized-data.md)；当前浏览器仍只读取 v1，KITTI 管线保持兼容。现有行为见 [实现架构](architecture.md) 和 [v1 数据格式](data-formats.md)。
+阶段 1、2 已实现独立的规范化离线契约、Waymo Python 适配器和参考校验器，见 [规范化离线数据](normalized-data.md)。浏览器现已通过共享 DatasetProvider 接入 KITTI v1 与 Waymo 规范化只读观测；完整姿态编辑等后续演进仍是接入方案，KITTI 文档保持兼容。现有行为见 [实现架构](architecture.md) 和 [v1 数据格式](data-formats.md)。
 
 ## 数据源与当前实施顺序
 
-当前先用一个 Waymo **Perception** validation 片段验证离线适配，再实现浏览器读取和编辑闭环；之后接入具有 cuboid 标注的 PandaSet 场景，检查六相机和双雷达差异。小样本先验证，再扩展到完整片段，不先下载整个数据集。
+当前已用一个 Waymo **Perception** validation 片段验证离线适配和浏览器只读展示，下一步实现完整姿态编辑闭环；之后接入具有 cuboid 标注的 PandaSet 场景，检查六相机和双雷达差异。小样本先验证，再扩展到完整片段，不先下载整个数据集。
 
 2026-10-07 查询到的下载信息：
 
@@ -44,7 +44,7 @@ flowchart LR
   writer --> legacy[v1 兼容输出<br/>显式记录信息损失]
 ```
 
-目标 Python 组织方式：`adapters/` 负责各 SDK、文件布局和源语义，`model/` 定义规范化结构，`pipeline/` 负责共享变换与派生处理，`writers/` 负责运行时版本输出与报告，CLI 仅组合这些模块。当前已抽取 KITTI 的 PCD、坐标基与 BEV 共享部分并加入 Waymo；规范化 writer 仍在 CLI 中，浏览器版本输出与 PandaSet 尚未实现。
+目标 Python 组织方式：`adapters/` 负责各 SDK、文件布局和源语义，`model/` 定义规范化结构，`pipeline/` 负责共享变换与派生处理，`writers/` 负责运行时版本输出与报告，CLI 仅组合这些模块。当前已抽取 KITTI 的 PCD、坐标基与 BEV 共享部分并加入 Waymo；规范化 writer 仍在 CLI 中，完整姿态编辑文档输出与 PandaSet 尚未实现。
 
 适配器提供序列索引、传感器定义、逐样本读取、位姿、标定与标注观测。按样本迭代，避免默认把整个数据集或全部传感器一次加载到内存。浏览器只读取统一输出；SDK、pickle、TFRecord/Parquet 解码依赖留在离线层。PandaSet 的 pandas 与 Waymo 的 SDK/解码依赖应按适配器可选安装；若 Python/平台依赖冲突，使用独立适配器环境，仍输出相同规范化契约。
 
@@ -73,7 +73,7 @@ Cuboid 的 `dimensions.x` 是宽、`dimensions.y` 是长、`dimensions.z` 是高
 
 ## 运行时需要同步演进
 
-已实现的源浏览 `DatasetProvider` 按参考时间解析资源，并返回样本引用、位姿、标定与质量标记。`EditorSession` 保持现有 requested/presented 与 epoch 机制，加载的是明确匹配的样本集合；资源键使用序列、传感器、sample 和处理版本，不能只靠 frame。
+共享 `DatasetProvider` 已覆盖 KITTI v1 与 Waymo 源浏览，提供点云、图片、位姿、时间和可选源投影引用；显式能力字段区分编辑权限、投影来源和图片失败策略。更丰富的质量标记仍待扩展。`EditorSession` 保持现有 requested/presented 与 epoch 机制，加载的是明确匹配的样本集合；资源键使用序列、传感器、sample 和处理版本，不能只靠 frame。
 
 需要扩展时间表、传感器样本索引和相机逐样本位姿，并在 Playhead、插值、投影、帧缓冲与导出中贯彻。不能只向 JSON 添加浏览器会忽略的字段就声明已支持。
 
