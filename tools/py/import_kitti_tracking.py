@@ -16,9 +16,10 @@ import numpy as np
 from PIL import Image
 
 from build_tracking_bev import build_bev
+from pipeline.geometry import BASIS
+from pipeline.pcd import write_pcd
 
 ROOT = Path(__file__).resolve().parents[2]
-BASIS = np.array([[1, 0, 0, 0], [0, 0, 1, 0], [0, -1, 0, 0], [0, 0, 0, 1]], dtype=float)
 LABELS = {'Car': 'Car', 'Van': 'Truck', 'Truck': 'Truck', 'Pedestrian': 'Pedestrian',
           'Person_sitting': 'Pedestrian', 'Cyclist': 'Cyclist', 'Tram': 'Truck'}
 
@@ -58,14 +59,6 @@ def ego_transforms(rows):
         matrix[:3, 3] = translations[frame]
         poses.append(matrix)
     return poses
-
-
-def write_pcd(path, points):
-    count = len(points)
-    header = f'VERSION 0.7\nFIELDS x y z intensity\nSIZE 4 4 4 4\nTYPE F F F F\nCOUNT 1 1 1 1\nWIDTH {count}\nHEIGHT 1\nPOINTS {count}\nDATA binary\n'
-    with path.open('wb') as stream:
-        stream.write(header.encode())
-        stream.write(points.astype('<f4').tobytes())
 
 
 def import_sequence(args, work):

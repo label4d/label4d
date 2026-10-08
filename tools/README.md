@@ -72,4 +72,46 @@ pnpm test
 
 **工具源码、测试、依赖锁文件和参考标定入 Git；原始数据、下载缓存、生成点云、LAS、Potree 与 BEV 不入 Git。** 建议用户数据输出到 `apps/web-ui/public/datasets/`，该目录已忽略。新数据可以按同样命令重新生成。
 
-目前正式适配器支持 KITTI tracking 的上述布局。其他数据格式应增加 Python 适配器，把同步帧、传感器标定和标签转换到同一个 v1 Y-up 契约，不能仅改扩展名后套用 KITTI 公式。
+目前浏览器导入支持 KITTI tracking 的上述布局；Waymo Perception v2.0.1 已有离线规范化适配器。新源不能强行压入 v1：真实时间与完整姿态使用 [规范化离线契约](../docs/normalized-data.md)，浏览器接入留到后续阶段。
+
+## Waymo Perception 离线导入
+
+安装可选 `waymo` extra（PyArrow、JSON Schema）；基础 KITTI 工具不依赖 TensorFlow。使用有真实标签的 training/validation，同一 segment 的五相机、五雷达和双回波：
+
+```text
+/data/waymo/validation/
+  vehicle_pose/<segment>.parquet
+  camera_calibration/<segment>.parquet
+  lidar_calibration/<segment>.parquet
+  camera_image/<segment>.parquet
+  lidar/<segment>.parquet
+  lidar_pose/<segment>.parquet
+  lidar_box/<segment>.parquet
+  lidar_camera_projection/<segment>.parquet
+```
+
+可选的 `camera_box`、`camera_to_lidar_box_association`、`lidar_camera_synced_box`、`projected_lidar_box`、`stats` 同样保留目录结构，存在时导入源字段。组件必须按原始参考时间排序；乱序、重复身份、缺帧和传感器集不匹配明确拒绝，不缓存整个大组件后静默配对。
+
+```sh
+pnpm data:import:waymo \
+  --input /data/waymo --split validation \
+  --segment 10203656353524179475_7625_000_7645_000 \
+  --output apps/web-ui/public/datasets/waymo-normalized-20 --frames 20
+pnpm data:validate:normalized apps/web-ui/public/datasets/waymo-normalized-20
+pnpm test:tools:waymo
+```
+
+去掉 `--frames` 导入完整片段，使用另一个输出目录。输出必须尚不存在，并且与源目录分离；临时目录中完成生成和校验后才发布，失败不会留下一个可误用的完成目录。源、输出、额外处理副本不入 Git。
+
+输出 `sequence.json`、逐帧完整位姿和框观测、原始 JPEG、世界 PCD、点属性 NPZ、过滤 BEV 和 `import-report.json`。不生成 v1 manifest 或快照，当前浏览器不能直接打开它。PCD/坐标基/BEV 复用 KITTI 的共享实现，Waymo 特有的 Parquet 和 range-image 处理在 `py/adapters/waymo.py`。
+
+独立校验使用可选 `waymo-reference` extra 与 Python 3.11，TensorFlow 只用于官方参考计算：
+
+```sh
+uv run --project tools/py --python 3.11 --extra waymo-reference \
+  python tools/py/validate_waymo_reference.py \
+  --input /data/waymo --output apps/web-ui/public/datasets/waymo-normalized-20 \
+  --frames 0 10 19
+```
+
+校验器从 Waymo 官方 GitHub 固定 commit 下载三个 SDK 数值源文件，验证固定 SHA256 后执行；框角点只执行原文件中的公开 corner 函数，避免依赖未生成的 protobuf。参考代码保留在临时目录，不复制入库。输出 `reference-report.json`，对照双回波 XYZ、3D 框八角点及原始点到相机像素的索引对应；不宣称已经实现滚动快门计算投影或浏览器显示。该 extra 的 TensorFlow 依赖限 Python <3.14，使用上述 Python 3.11 命令。

@@ -1,0 +1,631 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "labelfaster.normalized-sequence/1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "coordinateSystem": {
+      "type": "object",
+      "properties": {
+        "handedness": {
+          "const": "right"
+        },
+        "up": {
+          "const": "Y"
+        },
+        "unit": {
+          "const": "meter"
+        },
+        "matrixOrder": {
+          "const": "column-major"
+        },
+        "sourceWorldToLocal": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 16,
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "handedness",
+        "up",
+        "unit",
+        "matrixOrder",
+        "sourceWorldToLocal"
+      ],
+      "additionalProperties": false
+    },
+    "time": {
+      "type": "object",
+      "properties": {
+        "unit": {
+          "const": "microsecond"
+        },
+        "sourceOriginMicros": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "matchingPolicy": {
+          "const": "exact-frame-key"
+        },
+        "missingPolicy": {
+          "const": "reject"
+        }
+      },
+      "required": [
+        "unit",
+        "sourceOriginMicros",
+        "matchingPolicy",
+        "missingPolicy"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "dataset": {
+          "type": "string",
+          "minLength": 1
+        },
+        "release": {
+          "type": "string",
+          "minLength": 1
+        },
+        "split": {
+          "type": "string",
+          "minLength": 1
+        },
+        "segment": {
+          "type": "string",
+          "minLength": 1
+        },
+        "adapter": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract": {
+          "const": "labelfaster.normalized-sequence/1"
+        },
+        "frames": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "returns": {
+          "const": [
+            1,
+            2
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "component": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "component",
+              "path",
+              "sha256",
+              "bytes"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "dataset",
+        "release",
+        "split",
+        "segment",
+        "adapter",
+        "contract",
+        "frames",
+        "returns",
+        "sources"
+      ],
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "pointCloud": {
+          "type": "boolean"
+        },
+        "cameraImages": {
+          "type": "boolean"
+        },
+        "boxObservations3d": {
+          "type": "boolean"
+        },
+        "fullBoxPose": {
+          "type": "boolean"
+        },
+        "pointCameraReferences": {
+          "type": "boolean"
+        },
+        "editableInRuntimeV1": {
+          "const": false
+        }
+      },
+      "required": [
+        "pointCloud",
+        "cameraImages",
+        "boxObservations3d",
+        "fullBoxPose",
+        "pointCameraReferences",
+        "editableInRuntimeV1"
+      ],
+      "additionalProperties": false
+    },
+    "sensors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "camera",
+              "lidar"
+            ]
+          },
+          "sourceId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sensorToEgo": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 16,
+            "maxItems": 16
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "intrinsics": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "distortion": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 5,
+            "maxItems": 5
+          },
+          "rollingShutterDirection": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "sourceCalibration": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "sourceId",
+          "name",
+          "sensorToEgo"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "camera"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "model",
+                "width",
+                "height",
+                "intrinsics",
+                "distortion",
+                "rollingShutterDirection"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "frames": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "timeMicros": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "index",
+          "timeMicros",
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "bev": {
+      "type": "object",
+      "properties": {
+        "originX": {
+          "type": "number"
+        },
+        "originZ": {
+          "type": "number"
+        },
+        "metersPerPixel": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy": {
+          "const": "all-observed-boxes-excluded"
+        },
+        "boxPaddingMeters": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "originX",
+        "originZ",
+        "metersPerPixel",
+        "width",
+        "height",
+        "path",
+        "policy",
+        "boxPaddingMeters"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "id",
+    "coordinateSystem",
+    "time",
+    "provenance",
+    "capabilities",
+    "sensors",
+    "frames",
+    "bev"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Labelfaster offline normalized sequence revision 1 (not runtime v1/v2)",
+  "$defs": {
+    "frame": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "labelfaster.normalized-frame/1"
+        },
+        "sequenceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "timeMicros": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "egoToWorld": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 16,
+          "maxItems": 16
+        },
+        "samples": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "sensorId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "const": "available"
+                  },
+                  "sampleId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "referenceTimeMicros": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "poseTimeMicros": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "cameraToWorld": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 16,
+                    "maxItems": 16
+                  },
+                  "image": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "imageSha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "sourceFields": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "sensorId",
+                  "status",
+                  "sampleId",
+                  "referenceTimeMicros",
+                  "poseTimeMicros",
+                  "cameraToWorld",
+                  "image",
+                  "imageSha256",
+                  "sourceFields"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "sensorId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "const": "available"
+                  },
+                  "sampleId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "referenceTimeMicros": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "returnId": {
+                    "enum": [
+                      1,
+                      2
+                    ]
+                  },
+                  "motionCompensation": {
+                    "enum": [
+                      "per-pixel-vehicle-pose",
+                      "reference-vehicle-pose"
+                    ]
+                  },
+                  "pointOffset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "pointCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "sensorId",
+                  "status",
+                  "sampleId",
+                  "referenceTimeMicros",
+                  "returnId",
+                  "motionCompensation",
+                  "pointOffset",
+                  "pointCount"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "boxObservations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "objectId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "const": "human-observation"
+              },
+              "sourceTimestampMicros": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              "label": {
+                "type": "integer"
+              },
+              "size": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "boxToWorld": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 16,
+                "maxItems": 16
+              },
+              "sourceFields": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "objectId",
+              "source",
+              "sourceTimestampMicros",
+              "label",
+              "size",
+              "boxToWorld",
+              "sourceFields"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "sourceComponents": {
+          "type": "object"
+        },
+        "pointCloud": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "format": {
+              "const": "pcd-xyzi-binary"
+            },
+            "pointCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "attributes": {
+              "type": "string",
+              "minLength": 1
+            },
+            "attributesSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "attributeSchema": {
+              "const": "labelfaster.point-attributes/1"
+            }
+          },
+          "required": [
+            "path",
+            "format",
+            "pointCount",
+            "sha256",
+            "attributes",
+            "attributesSha256",
+            "attributeSchema"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema",
+        "sequenceId",
+        "index",
+        "timeMicros",
+        "egoToWorld",
+        "samples",
+        "boxObservations",
+        "sourceComponents",
+        "pointCloud"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

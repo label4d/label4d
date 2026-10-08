@@ -4,6 +4,8 @@
 
 Read `README.md` and the relevant parts of `docs/architecture.md`. Read `docs/data-formats.md` before changing geometry, projection, import or serialization; read `tools/README.md` before changing offline tooling. These describe the implemented v1 application. `docs/roadmap.md` lists future work, not current guarantees.
 
+For Waymo or normalized offline data, also read `docs/normalized-data.md`. `labelfaster.normalized-sequence/1` is an offline contract, not a browser manifest or the historical v2 fixture format. Do not emit a lossy v1 manifest for unsupported sample timing or full box poses.
+
 Inspect `git status` before editing. Preserve unrelated work and saved annotations. Do not assume generated KITTI assets, a running service, PotreeConverter or any contributor's local paths exist.
 
 ## Boundaries

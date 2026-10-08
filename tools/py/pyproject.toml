@@ -8,5 +8,9 @@ dependencies = [
     "pillow>=12.3.0",
 ]
 
+[project.optional-dependencies]
+waymo = ["pyarrow>=25.0.0", "jsonschema>=4.23"]
+waymo-reference = ["pyarrow>=25.0.0", "jsonschema>=4.23", "tensorflow>=2.20; python_version < '3.14'"]
+
 [tool.uv]
 package = false

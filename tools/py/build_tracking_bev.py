@@ -25,12 +25,10 @@ def pixel_indices(points, origin, mpp, size):
     return pixels[valid, 1] * size + pixels[valid, 0]
 
 
-def build_bev(source=SOURCE, output=OUT, mpp=MPP):
-    files = sorted(source.glob('*.pcd'))
-    manifest_path = output / 'manifest.json'
-    manifest = json.loads(manifest_path.read_text())
-    if len(files) != manifest['frameCount'] or not np.isfinite(mpp) or mpp <= 0:
-        raise ValueError('BEV requires one filtered PCD per manifest frame and positive mpp')
+def rasterize_bev(files, output, mpp):
+    """Shared rasterizer independent of runtime manifest version."""
+    if not files or not np.isfinite(mpp) or mpp <= 0:
+        raise ValueError('BEV requires clouds and positive mpp')
     lower, upper = np.full(2, np.inf), np.full(2, -np.inf)
     for path in files:
         points = read_points(path)[:, [0, 2]]
@@ -59,22 +57,33 @@ def build_bev(source=SOURCE, output=OUT, mpp=MPP):
     occupied = density > 0
     brightness = np.clip(55 + np.log1p(density[occupied]) * 28, 0, 210)
     image[occupied] = np.stack([brightness * .65, brightness * .92, brightness], axis=1).astype(np.uint8)
-    (output / 'bev').mkdir(exist_ok=True)
+    (output / 'bev').mkdir(parents=True, exist_ok=True)
     Image.fromarray(image).save(output / 'bev/map.png')
+    config = {'originX': float(origin[0]), 'originZ': float(origin[1]),
+              'metersPerPixel': mpp, 'width': size, 'height': size}
+    report = {'sourcePoints': total, 'occupiedPixels': int(occupied.sum()),
+              'rowAxis': '+Z', 'columnAxis': '+X'}
+    return config, report
+
+
+def build_bev(source=SOURCE, output=OUT, mpp=MPP):
+    files = sorted(source.glob('*.pcd'))
+    manifest_path = output / 'manifest.json'
+    manifest = json.loads(manifest_path.read_text())
+    if len(files) != manifest['frameCount']:
+        raise ValueError('BEV requires one filtered PCD per manifest frame')
+    config, bev_report = rasterize_bev(files, output, mpp)
     prefix = manifest['pointCloud']['urlTemplate'].split('/pcd/')[0]
-    manifest['bev'] = {'tileset': {
-        'originX': float(origin[0]), 'originZ': float(origin[1]),
-        'metersPerPixel': mpp, 'width': size, 'height': size, 'tileSize': size,
-        'urlTemplate': f'{prefix}/bev/map.png',
-    }}
+    manifest['bev'] = {'tileset': {**config, 'tileSize': config['width'],
+                                 'urlTemplate': f'{prefix}/bev/map.png'}}
     manifest_path.write_text(json.dumps(manifest, indent=2))
     report_path = output / 'alignment-report.json'
     report = json.loads(report_path.read_text())
-    if total != report['staticPoints']:
+    if bev_report['sourcePoints'] != report['staticPoints']:
         raise ValueError('BEV source does not match the filtered Potree cloud')
-    report['bev'] = {'sourcePoints': total, 'occupiedPixels': int(occupied.sum()), 'rowAxis': '+Z', 'columnAxis': '+X'}
+    report['bev'] = bev_report
     report_path.write_text(json.dumps(report, indent=2))
-    print(f'BEV: {size}x{size}, {mpp} m/px, {total} same-source static points')
+    print(f"BEV: {config['width']}x{config['height']}, {mpp} m/px, {bev_report['sourcePoints']} same-source static points")
 
 
 if __name__ == '__main__':

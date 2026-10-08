@@ -14,4 +14,4 @@
 
 开源发布前还需确定项目许可证、复查第三方与参考数据归属，并在干净检出中验证安装、真实数据加载、构建和可选数据工具。未经实测，不声明生产就绪或全规模性能。
 
-近期数据接入候选为 PandaSet 单场景，方案与验收顺序见 [多数据源设计](multi-dataset-design.md)。该适配器与新契约尚未实现。
+Waymo Perception 的离线规范化契约与 Python 适配器已实现，见 [离线数据契约](normalized-data.md)。后续先实现浏览器 DatasetProvider、真实时间与完整姿态编辑闭环，再用 PandaSet 场景验证通用性；阶段状态见 [多数据源设计](multi-dataset-design.md)。
