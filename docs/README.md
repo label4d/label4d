@@ -1,6 +1,6 @@
 # 文档导航
 
-文档以当前代码实现为准，未来能力单独放在路线图。开始使用与贡献请先阅读根目录 [README](../README.md)、[CONTRIBUTING](../CONTRIBUTING.md) 和 [AGENTS](../AGENTS.md)。
+文档以当前代码实现为准，未来能力单独放在路线图。开始使用与贡献请先阅读根目录 [中文 README](../README.zh-CN.md)（英文版见 [README](../README.md)）、[CONTRIBUTING](../CONTRIBUTING.md) 和 [AGENTS](../AGENTS.md)。
 
 | 文档 | 用途 |
 | --- | --- |

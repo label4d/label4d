@@ -3,6 +3,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/label4d/label4d/actions/workflows/ci.yml/badge.svg)](https://github.com/label4d/label4d/actions/workflows/ci.yml)
 
+**English** | [简体中文](README.zh-CN.md)
+
 A browser-based workspace for annotating 4D point-cloud sequences with synchronized camera views.
 
 Label4D combines a React/Three.js editor, a TypeScript annotation engine, and Python data tools. It runs locally with static datasets and saves annotation documents in the browser.
