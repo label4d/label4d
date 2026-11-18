@@ -7,6 +7,10 @@ const realManifest = fileURLToPath(new URL('../public/kitti-camera/manifest.json
 for (const dataset of ['fixture', 'kitti']) {
 test(`${dataset}: 3D follow keeps the camera rigidly attached during playback, seek and user orbit`, async ({ page }) => {
   test.skip(dataset === 'kitti' && !existsSync(realManifest), 'Generate the official camera preview first');
+  // The official preview decodes a 200-frame point cloud and camera set; under
+  // parallel workers the last seek needs longer than the default poll budget.
+  const settle = dataset === 'kitti' ? 30_000 : 10_000;
+  test.setTimeout(dataset === 'kitti' ? 120_000 : 45_000);
   await page.goto(dataset === 'fixture' ? editorUrl : '/?manifest=/kitti-camera/manifest.json');
   await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('已保存');
   const view = page.getByTestId('cloud-view');
@@ -26,12 +30,12 @@ test(`${dataset}: 3D follow keeps the camera rigidly attached during playback, s
   const initial = await relative();
   await page.getByText('点云显示', { exact: true }).click();
   await page.getByRole('button', { name: '播放', exact: true }).click();
-  await expect.poll(async () => (await relative()).frame).toBeGreaterThan(5);
+  await expect.poll(async () => (await relative()).frame, { timeout: settle }).toBeGreaterThan(5);
   await page.getByRole('button', { name: '暂停', exact: true }).click();
   sameOffset(initial, await relative());
   await page.getByLabel('跳转到帧', { exact: true }).fill(String(Math.floor(manifest.frameCount / 2)));
   await page.getByLabel('跳转到帧', { exact: true }).press('Enter');
-  await expect.poll(async () => (await relative()).frame).toBe(Math.floor(manifest.frameCount / 2));
+  await expect.poll(async () => (await relative()).frame, { timeout: settle }).toBe(Math.floor(manifest.frameCount / 2));
   sameOffset(initial, await relative());
   const rect = (await view.locator('canvas').boundingBox())!;
   await page.mouse.move(rect.x + rect.width * .65, rect.y + rect.height * .6);
@@ -42,7 +46,7 @@ test(`${dataset}: 3D follow keeps the camera rigidly attached during playback, s
   expect(adjusted.matrix).not.toEqual(initial.matrix);
   await page.getByLabel('跳转到帧', { exact: true }).fill(String(manifest.frameCount - 1));
   await page.getByLabel('跳转到帧', { exact: true }).press('Enter');
-  await expect.poll(async () => (await relative()).frame).toBe(manifest.frameCount - 1);
+  await expect.poll(async () => (await relative()).frame, { timeout: settle }).toBe(manifest.frameCount - 1);
   sameOffset(adjusted, await relative());
   await page.screenshot({ path: `test-results/camera-follow-${dataset}.png` });
 });

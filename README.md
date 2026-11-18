@@ -1,5 +1,8 @@
 # Labelfaster
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/k7/labelfaster/actions/workflows/ci.yml/badge.svg)](https://github.com/k7/labelfaster/actions/workflows/ci.yml)
+
 A browser-based workspace for annotating 4D point-cloud sequences with synchronized camera views.
 
 Labelfaster combines a React/Three.js editor, a TypeScript annotation engine, and Python data tools. It runs locally with static datasets and saves annotation documents in the browser.
@@ -65,7 +68,7 @@ Add a static map to an imported normalized sequence with `pnpm data:potree:norma
 
 For Waymo import and independent SDK checks, see the [data-tools guide](tools/README.md) and [normalized contract](docs/normalized-data.md).
 
-Dataset downloads and generated assets are not committed. KITTI and third-party dependencies retain their own usage and license terms.
+Dataset downloads and generated assets are not committed. KITTI and third-party dependencies retain their own usage and license terms; see [NOTICE](NOTICE) for the attribution details.
 
 ## Repository map
 
@@ -92,6 +95,8 @@ pnpm --filter @labelfaster/web-ui exec playwright test --workers=2
 
 Playwright starts its own test server on port **4173**, which must be free. Real-data tests skip when their generated assets are absent; a passing editor fixture test run does not establish real-data alignment. Python tool tests include a small, generated input independent of the real preview.
 
+The same checks run on every push and pull request through GitHub Actions (`.github/workflows/ci.yml`): lint, unit tests and build, the Python tool tests, and the browser suite. The browser job has no generated KITTI or Waymo assets, so the real-data specs skip there exactly as they do on a fresh clone.
+
 Annotation saves are local to the browser profile and origin. Export snapshots for backup before clearing browser data or changing origins; generated datasets and saved annotation documents are different artifacts.
 
 ## Documentation and contributing
@@ -102,6 +107,17 @@ Annotation saves are local to the browser profile and origin. Export snapshots f
 - [Contributing](CONTRIBUTING.md) — development and verification workflow.
 - [AGENTS.md](AGENTS.md) — repository guidance for coding agents.
 
-## License status
+## License
 
-A project license has not yet been selected. Public-source preparation does not itself grant redistribution or modification rights; maintainers must add the selected license before an open-source release. Dataset and dependency terms are separate.
+Labelfaster is licensed under the [MIT License](LICENSE).
+
+```
+Copyright (c) 2026 The Labelfaster Authors
+```
+
+[NOTICE](NOTICE) records the third-party components this repository references
+(PotreeConverter, npm and Python dependencies) and the KITTI reference inputs
+that are redistributed under the KITTI dataset terms. The project license
+covers the code in this repository only: KITTI and Waymo data keep their own
+usage terms, and dataset downloads and generated assets are not committed.
+Security reports are handled as described in [SECURITY.md](SECURITY.md).

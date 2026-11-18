@@ -2,6 +2,16 @@
   "name": "@labelfaster/web-ui",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/k7/labelfaster.git",
+    "directory": "apps/web-ui"
+  },
+  "homepage": "https://github.com/k7/labelfaster#readme",
+  "bugs": {
+    "url": "https://github.com/k7/labelfaster/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

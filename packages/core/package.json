@@ -2,6 +2,16 @@
   "name": "@labelfaster/core",
   "version": "0.1.0",
   "description": "Core annotation engine for Labelfaster",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/k7/labelfaster.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/k7/labelfaster#readme",
+  "bugs": {
+    "url": "https://github.com/k7/labelfaster/issues"
+  },
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",

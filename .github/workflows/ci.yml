@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Lint, test and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-ui-dist
+          path: apps/web-ui/dist
+          retention-days: 7
+
+  python-tools:
+    name: Python data tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # Mirrors `pnpm test:tools` and `pnpm test:tools:waymo`; --frozen keeps
+      # tools/py/uv.lock authoritative so lockfile drift fails the job.
+      - run: uv run --project tools/py --frozen python -m unittest discover -s tools/py/tests -p "test_*.py"
+      - run: uv run --project tools/py --extra waymo --frozen python -m unittest discover -s tools/py/tests -p "test_*.py"
+
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @labelfaster/web-ui exec playwright install --with-deps chromium
+      # Specs that need generated KITTI/Waymo assets skip themselves when the
+      # assets are absent, so this job runs the fixture-based regression set.
+      - run: pnpm --filter @labelfaster/web-ui exec playwright test --workers=2

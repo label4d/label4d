@@ -38,4 +38,6 @@ The old v2 fixture preflight checks schema and checksums only. It does not prove
 
 ## Release preparation
 
-Before a public open-source release, maintainers need to select and add a project license, review third-party/reference-data attribution, and verify setup in a fresh checkout. Do not label the project production-ready or claim scale/performance beyond measured coverage. Current limits and planned extensions belong in the [roadmap](docs/roadmap.md).
+The project is licensed under the MIT License; the license text is in [LICENSE](LICENSE) and third-party and reference-data attribution is recorded in [NOTICE](NOTICE). Do not label the project production-ready or claim scale/performance beyond measured coverage. Current limits and planned extensions belong in the [roadmap](docs/roadmap.md).
+
+Changes to the project license, to the NOTICE attribution, or to the security reporting channel are maintainer decisions: propose them as an issue before editing those files.

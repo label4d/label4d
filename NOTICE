@@ -1,0 +1,72 @@
+Labelfaster
+Copyright 2026 The Labelfaster Authors
+
+This product includes software developed by the Labelfaster project and is
+licensed under the MIT License (see LICENSE).
+
+This file is not required by the MIT License. It records where third-party
+components and reference data come from, so that attribution stays with the
+sources.
+
+--------------------------------------------------------------------------------
+Third-party components referenced by this repository
+--------------------------------------------------------------------------------
+
+PotreeConverter
+  Copyright 2020 Markus Schütz
+  Licensed under the BSD 2-Clause License.
+  https://github.com/potree/PotreeConverter
+
+  third_party/PotreeConverter-apple.patch is a patch derived from upstream
+  PotreeConverter at commit a70ef212198b0e5ae1d071713a0c8cbda8fcc9a7. The
+  upstream sources are not vendored in this repository; only the build
+  instructions (third_party/POTREE_BUILD.md) and the patch are included.
+  PotreeConverter and its submodules remain under their own upstream licenses.
+
+Potree octree format
+  The browser overlay reads Potree 2.0 octree files produced by the converter
+  above. No Potree runtime source is copied into this repository.
+
+npm dependencies
+  Runtime and development dependencies are declared in package.json and
+  pnpm-lock.yaml. Their licenses are permissive (MIT, ISC or Apache-2.0), for
+  example: React, React DOM, Three.js, Radix UI icons, Lucide, mitt, fflate,
+  clsx, tailwind-merge, class-variance-authority, Vite, Vitest, Playwright,
+  TypeScript, ESLint, tsup and Tailwind CSS. Each dependency keeps its own
+  license and copyright notice.
+
+Python dependencies
+  numpy and Pillow are used by the offline data tools (BSD-3-Clause and
+  MIT-CMU respectively). The Waymo Open Dataset SDK is used through its
+  published packages under Apache-2.0; it is a runtime dependency only and no
+  Waymo code or data is redistributed here.
+
+--------------------------------------------------------------------------------
+Reference data (NOT covered by this project's license)
+--------------------------------------------------------------------------------
+
+The following small reference inputs are derived from the KITTI Vision
+Benchmark Suite and are redistributed under the KITTI dataset terms, not under
+the MIT License. Attribution is required when using them:
+
+  fixtures/calibration/2011_09_26/calib_cam_to_cam.txt
+  fixtures/calibration/2011_09_26/calib_imu_to_velo.txt
+  fixtures/calibration/2011_09_26/calib_velo_to_cam.txt
+  fixtures/calibration/2011_09_26/tracking-calib-0011.txt
+  fixtures/calibration/2011_09_26/tracking-reference.json
+  fixtures/r-mini/reference-answers.json
+  fixtures/r-mini/manifest.json
+
+  Source: KITTI Vision Benchmark Suite, Karlsruhe Institute of Technology
+  https://www.cvlibs.net/datasets/kitti/
+  Tracking data: https://s3.eu-central-1.amazonaws.com/avg-kitti/
+
+  Please cite: A. Geiger, P. Lenz, C. Stiller and R. Urtasun, "Vision meets
+  Robotics: KITTI Dataset", International Journal of Robotics Research (2013).
+
+  The Waymo Perception data used to exercise the normalized pipeline is not
+  committed to this repository and must be obtained from the Waymo Open
+  Dataset under its own terms.
+
+No KITTI or Waymo images, point clouds, videos or raw archives are redistributed
+by this repository; only the small reference inputs listed above.
