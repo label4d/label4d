@@ -120,7 +120,7 @@ Playwright 自带测试服务，占用端口 **4173**，需要该端口空闲。
 - [文档索引](docs/README.md) — 当前指南，含中文技术文档。
 - [实现架构](docs/architecture.md) — 已实现的组件与 Mermaid 图。
 - [数据格式](docs/data-formats.md) — 坐标、manifest 与快照契约。
-- [贡献指南](CONTRIBUTING.md) — 开发与验证流程。
+- [贡献指南](CONTRIBUTING.zh-CN.md) — 开发与验证流程（英文版见 [CONTRIBUTING.md](CONTRIBUTING.md)）。
 - [AGENTS.md](AGENTS.md) — 面向编码代理的仓库约定。
 
 ## 许可

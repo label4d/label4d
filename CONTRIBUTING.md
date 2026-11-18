@@ -1,5 +1,7 @@
 # Contributing
 
+**English** | [简体中文](CONTRIBUTING.zh-CN.md)
+
 Start with the [README](README.md), [architecture](docs/architecture.md) and [data contracts](docs/data-formats.md). The runtime is a v1 local editor; planned v2 behavior is not an implementation contract. Agent-specific guidance is in [AGENTS.md](AGENTS.md).
 
 ## Develop locally

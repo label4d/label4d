@@ -120,7 +120,7 @@ Annotation saves are local to the browser profile and origin. Export snapshots f
 - [Documentation index](docs/README.md) — current guides, including Chinese technical documentation.
 - [Architecture](docs/architecture.md) — implemented components and Mermaid diagrams.
 - [Data formats](docs/data-formats.md) — coordinates, manifest and snapshot contracts.
-- [Contributing](CONTRIBUTING.md) — development and verification workflow.
+- [Contributing](CONTRIBUTING.md) — development and verification workflow ([中文版](CONTRIBUTING.zh-CN.md)).
 - [AGENTS.md](AGENTS.md) — repository guidance for coding agents.
 
 ## License
