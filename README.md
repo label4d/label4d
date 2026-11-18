@@ -7,6 +7,10 @@ A browser-based workspace for annotating 4D point-cloud sequences with synchroni
 
 Label4D combines a React/Three.js editor, a TypeScript annotation engine, and Python data tools. It runs locally with static datasets and saves annotation documents in the browser.
 
+![Label4D workspace: 3D point cloud with the ego trajectory, orthographic top/front/side views, the camera view with projected boxes, the object list and pose properties, and the trajectory timeline](docs/images/workspace.webp)
+
+*One workspace: current-frame point cloud, orthographic views, the camera view with projected boxes, object attributes and the trajectory timeline. Official KITTI tracking 0011 preview data.*
+
 ## What works today
 
 - Current-frame point clouds and a streamed static Potree overlay.
@@ -20,6 +24,16 @@ Label4D combines a React/Three.js editor, a TypeScript annotation engine, and Py
 - Read-only Waymo source browsing: real timestamps, five cameras, full-pose boxes and official point pixel references.
 
 Editable documents use **v1, right-handed Y-up coordinates**. Waymo normalized sequences use a separate, explicitly read-only browser presentation contract; they are never converted to yaw-only v1 documents. Full-pose editing and collaboration remain future work. See the [roadmap](docs/roadmap.md).
+
+## Views
+
+![BEV top-down view: the aligned map, the current-frame lidar in yellow, the ego trajectory in green and the annotated boxes](docs/images/bev-view.webp)
+
+*BEV top-down view: aligned map, current-frame lidar in yellow, ego trajectory in green, annotated boxes.*
+
+![Read-only Waymo source browsing: five synchronized cameras with the official 2D projected boxes, full-pose boxes in 3D and the source observation timeline](docs/images/waymo-source.webp)
+
+*Read-only Waymo source browsing: five synchronized cameras with official projected boxes, full-pose boxes in 3D, and the source observation timeline.*
 
 ## Quick start
 

@@ -16,7 +16,7 @@ dataset and not a dataset you can open in the browser.
 These files are derived from the KITTI Vision Benchmark Suite and are
 redistributed under the KITTI dataset terms, **not** under this project's
 license. Sources and the required citation are listed in the repository
-[NOTICE](../../../NOTICE); see also
+[NOTICE](../../NOTICE); see also
 [the calibration README](../calibration/2011_09_26/README.md).
 
 ## Known limitation
