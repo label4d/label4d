@@ -58,17 +58,16 @@ jobs:
     container:
       # The image ships Chromium together with its system libraries, matching
       # the Playwright version pinned in pnpm-lock.yaml (1.55.0). Keep the tag
-      # in sync when that dependency changes.
+      # in sync when that dependency changes. The image also carries Node, so
+      # the job does not use setup-node, which cannot install into the
+      # container image.
       image: mcr.microsoft.com/playwright:v1.55.0-noble
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: pnpm
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 8.15.0
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@8.15.0 --activate
       - run: pnpm install --frozen-lockfile
       # Specs that need generated KITTI/Waymo assets skip themselves when the
       # assets are absent, so this job runs the fixture-based regression set.
