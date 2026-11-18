@@ -17,7 +17,7 @@ that read local dataset files.
 Please report suspected vulnerabilities privately through GitHub Security
 Advisories rather than a public issue:
 
-https://github.com/k7/label4d/security/advisories/new
+https://github.com/label4d/label4d/security/advisories/new
 
 If that page is unavailable, open a regular issue that describes the impact
 without a working exploit, and ask for a private channel.

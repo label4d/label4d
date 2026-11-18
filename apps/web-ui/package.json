@@ -5,12 +5,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/k7/label4d.git",
+    "url": "git+https://github.com/label4d/label4d.git",
     "directory": "apps/web-ui"
   },
-  "homepage": "https://github.com/k7/label4d#readme",
+  "homepage": "https://github.com/label4d/label4d#readme",
   "bugs": {
-    "url": "https://github.com/k7/label4d/issues"
+    "url": "https://github.com/label4d/label4d/issues"
   },
   "type": "module",
   "scripts": {

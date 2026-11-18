@@ -1,7 +1,7 @@
 # Label4D
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![CI](https://github.com/k7/label4d/actions/workflows/ci.yml/badge.svg)](https://github.com/k7/label4d/actions/workflows/ci.yml)
+[![CI](https://github.com/label4d/label4d/actions/workflows/ci.yml/badge.svg)](https://github.com/label4d/label4d/actions/workflows/ci.yml)
 
 A browser-based workspace for annotating 4D point-cloud sequences with synchronized camera views.
 
