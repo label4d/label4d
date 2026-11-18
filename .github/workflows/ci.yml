@@ -72,9 +72,12 @@ jobs:
       # Specs that need generated KITTI/Waymo assets skip themselves when the
       # assets are absent, so this job runs the fixture-based regression set.
       - name: Run the browser suite
+        shell: bash
         run: |
-          set -o pipefail
-          pnpm --filter @label4d/web-ui exec playwright test --workers=2 2>&1 | tee /tmp/playwright.log
+          set +e
+          pnpm --filter @label4d/web-ui exec playwright test --workers=2 > /tmp/playwright.log 2>&1
           status=$?
-          { echo '### Browser test log'; echo '```'; cat /tmp/playwright.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          { echo '### Browser test log'; echo '```'; tail -c 20000 /tmp/playwright.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=Browser suite exit $status::$(tail -c 3000 /tmp/playwright.log | tr '\n' ' ' | tr '%' '%25')"
+          cat /tmp/playwright.log
           exit $status
