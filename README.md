@@ -9,7 +9,7 @@ Label4D combines a React/Three.js editor, a TypeScript annotation engine, and Py
 
 ![Label4D workspace: 3D point cloud with the ego trajectory, orthographic top/front/side views, the camera view with projected boxes, the object list and pose properties, and the trajectory timeline](docs/images/workspace.webp)
 
-*One workspace: current-frame point cloud, orthographic views, the camera view with projected boxes, object attributes and the trajectory timeline. Official KITTI tracking 0011 preview data.*
+*One workspace: the accumulated lidar sweep rings and the ego trajectory in 3D, the orthographic top/front/side views, the camera view with projected boxes, the object attributes and the trajectory timeline. Official KITTI tracking 0011 preview data.*
 
 ## What works today
 
