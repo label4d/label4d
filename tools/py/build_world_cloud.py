@@ -1,4 +1,4 @@
-"""Labelfaster offline data tooling."""
+"""Label4D offline data tooling."""
 
 import argparse
 import json

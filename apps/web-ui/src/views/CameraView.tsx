@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { CameraImageView } from '@labelfaster/core';
+import { CameraImageView } from '@label4d/core';
 import { useSession, useSessionTick } from '../session/SessionProvider';
 
 /**

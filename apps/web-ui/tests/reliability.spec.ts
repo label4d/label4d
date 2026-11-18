@@ -3,12 +3,12 @@ import type { Page } from '@playwright/test';
 
 async function read(page: Page) {
   return page.evaluate(async () => {
-    const probe = (window as unknown as { __LABELFASTER_TEST__: { read(): Promise<{
+    const probe = (window as unknown as { __LABEL4D_TEST__: { read(): Promise<{
       frame: { requested: number; presented: number; status: string };
       document: { tracks: Array<{ keyframes: { frames: number[]; pos: number[] } }>; trackCount: number };
       persistence: { status: string; savedRevision: number };
       interaction: { gesture: string; canUndo: boolean; canRedo: boolean };
-    }> } }).__LABELFASTER_TEST__;
+    }> } }).__LABEL4D_TEST__;
     return probe.read();
   });
 }

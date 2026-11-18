@@ -1,7 +1,7 @@
 [project]
-name = "labelfaster-tools"
+name = "label4d-tools"
 version = "0.1.0"
-description = "Labelfaster offline data tooling (point cloud stitching, fixtures)"
+description = "Label4D offline data tooling (point cloud stitching, fixtures)"
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",

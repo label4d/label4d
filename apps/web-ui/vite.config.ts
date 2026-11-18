@@ -9,7 +9,7 @@ export default defineConfig({
     alias: {
       '@': '/src',
       // 直接引用 core 源码，避免 core dist 未重建导致 dev 页面跑旧代码
-      '@labelfaster/core': fileURLToPath(
+      '@label4d/core': fileURLToPath(
         new URL('../../packages/core/src/index.ts', import.meta.url)
       ),
     },

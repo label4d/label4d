@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { EditorSession, IndexedDbDocumentStorage } from '@labelfaster/core';
-import type { SessionEvents } from '@labelfaster/core';
+import { EditorSession, IndexedDbDocumentStorage } from '@label4d/core';
+import type { SessionEvents } from '@label4d/core';
 import { installTestProbe } from './testProbe';
 
 const SessionContext = createContext<EditorSession | null>(null);

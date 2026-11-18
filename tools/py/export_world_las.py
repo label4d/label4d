@@ -55,7 +55,7 @@ def main() -> None:
     header[24] = 1  # version major
     header[25] = 4  # version minor
     header[26:58] = b"LAStools".ljust(32)  # system identifier（32 字节 @26-57）
-    header[58:90] = b"labelfaster".ljust(32)  # generating software（32 字节 @58-89）
+    header[58:90] = b"label4d".ljust(32)  # generating software（32 字节 @58-89）
     struct.pack_into("<H", header, 90, 1)  # creation day
     struct.pack_into("<H", header, 92, 2026)  # creation year
     struct.pack_into("<H", header, 94, HEADER_SIZE)

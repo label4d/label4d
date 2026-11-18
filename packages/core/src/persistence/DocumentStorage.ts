@@ -12,7 +12,7 @@ export interface DurableEdit {
   inverseReview: SnapshotQA;
 }
 export interface StoredDocument {
-  schema: 'labelfaster.local.v1';
+  schema: 'label4d.local.v1';
   revision: number;
   baseline: SnapshotDocument;
   edits: DurableEdit[];
@@ -33,7 +33,7 @@ export class IndexedDbDocumentStorage implements DocumentStorage {
   private readonly owner = crypto.randomUUID();
   private releaseLock: (() => void) | null = null;
   private browserLock = false;
-  constructor(private readonly databaseName = 'labelfaster-documents') {}
+  constructor(private readonly databaseName = 'label4d-documents') {}
 
   async open(key: string, initial: SnapshotDocument): Promise<StoredDocument> {
     if (this.closed) throw new Error('Storage is closed');
@@ -81,7 +81,7 @@ export class IndexedDbDocumentStorage implements DocumentStorage {
       const lease = record?.lease;
       if (!this.browserLock && lease && lease.owner !== this.owner && lease.expires > Date.now()) throw new Error('This document is being edited in another tab');
       this.token = crypto.randomUUID();
-      const value = record?.document ?? { schema: 'labelfaster.local.v1' as const, revision: 0, baseline: initial, edits: [] };
+      const value = record?.document ?? { schema: 'label4d.local.v1' as const, revision: 0, baseline: initial, edits: [] };
       return { document: value, lease: { owner: this.owner, token: this.token, expires: Date.now() + 20_000 } };
     });
     if (this.closed) throw new Error('Storage is closed');

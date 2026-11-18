@@ -1,4 +1,4 @@
-import type { EditorSession } from '@labelfaster/core';
+import type { EditorSession } from '@label4d/core';
 export function installTestProbe(session: EditorSession): () => void {
   if (import.meta.env.MODE !== 'test') return () => {};
   const probe = { async read(query: { objectIds?: string[] } = {}) {
@@ -19,7 +19,7 @@ export function installTestProbe(session: EditorSession): () => void {
       resources: session.bufferStats(), review: session.qa,
     });
   } };
-  const win = window as unknown as { __LABELFASTER_TEST__?: typeof probe };
-  win.__LABELFASTER_TEST__ = probe;
-  return () => { if (win.__LABELFASTER_TEST__ === probe) delete win.__LABELFASTER_TEST__; };
+  const win = window as unknown as { __LABEL4D_TEST__?: typeof probe };
+  win.__LABEL4D_TEST__ = probe;
+  return () => { if (win.__LABEL4D_TEST__ === probe) delete win.__LABEL4D_TEST__; };
 }

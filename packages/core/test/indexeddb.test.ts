@@ -32,7 +32,7 @@ describe('IndexedDB journal and fencing', () => {
   });
   it('migrates the old envelope atomically and preserves baseline, revision and undo records', async () => {
     const name = crypto.randomUUID(); const db = await open(name, 1);
-    const document: StoredDocument = { schema: 'labelfaster.local.v1', revision: 2, baseline, edits: [edit(1), { ...edit(2), action: 'undo' }] };
+    const document: StoredDocument = { schema: 'label4d.local.v1', revision: 2, baseline, edits: [edit(1), { ...edit(2), action: 'undo' }] };
     const tx = db.transaction('documents', 'readwrite');
     tx.objectStore('documents').put({ document, lease: { owner: 'old', token: 'old', expires: 0 } }, 'test');
     await complete(tx); db.close();

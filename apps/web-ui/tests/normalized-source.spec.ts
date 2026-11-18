@@ -8,7 +8,7 @@ for (const size of [20, 198]) test(`Waymo ${size} frames: source browsing, camer
   test.skip(!existsSync(root + 'sequence.json'), 'Generate normalized real Waymo assets first');
   const sequence = JSON.parse(readFileSync(root + 'sequence.json', 'utf8'));
   const errors: string[] = []; page.on('pageerror', (e) => errors.push(String(e)));
-  const read = () => page.evaluate(async () => (window as any).__LABELFASTER_TEST__.read());
+  const read = () => page.evaluate(async () => (window as any).__LABEL4D_TEST__.read());
   const tree = sequence.potree ? page.waitForResponse((r) => r.url().endsWith(`/waymo-normalized-${size}/potree/octree.bin`) && r.status() === 206) : null;
   await page.goto(`/?manifest=/datasets/waymo-normalized-${size}/sequence.json`);
   await expect(page.getByRole('status', { name: '本地保存状态' })).toContainText('只读浏览', { timeout: 60000 });
@@ -38,7 +38,7 @@ for (const size of [20, 198]) test(`Waymo ${size} frames: source browsing, camer
     expect(actual.dataset.cameras).toHaveLength(5); expect(actual.dataset.cameras.every((a: any) => a.image)).toBe(true);
     for (const camera of actual.dataset.cameras) expect(camera.poseTime).toBe(source.samples.find((s: any) => s.sensorId === camera.id).poseTimeMicros/1e6);
     const id = source.boxObservations[0].objectId;
-    const resolved = await page.evaluate(async (objectId) => (window as any).__LABELFASTER_TEST__.read({ objectIds: [objectId] }), id);
+    const resolved = await page.evaluate(async (objectId) => (window as any).__LABEL4D_TEST__.read({ objectIds: [objectId] }), id);
     expect(resolved.dataset.states[0].boxToWorld).toEqual(source.boxObservations[0].boxToWorld);
     await expect(page.locator('.camera-empty')).toHaveCount(0);
     await page.screenshot({ path: `test-results/waymo-${size}-frame${frame}.png` });

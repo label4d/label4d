@@ -1,16 +1,16 @@
 {
-  "name": "@labelfaster/core",
+  "name": "@label4d/core",
   "version": "0.1.0",
-  "description": "Core annotation engine for Labelfaster",
+  "description": "Core annotation engine for Label4D",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/k7/labelfaster.git",
+    "url": "git+https://github.com/k7/label4d.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/k7/labelfaster#readme",
+  "homepage": "https://github.com/k7/label4d#readme",
   "bugs": {
-    "url": "https://github.com/k7/labelfaster/issues"
+    "url": "https://github.com/k7/label4d/issues"
   },
   "type": "module",
   "main": "dist/index.cjs",

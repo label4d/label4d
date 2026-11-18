@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useSession, useSessionTick } from '../session/SessionProvider';
-import { colorForLabel } from '@labelfaster/core';
+import { colorForLabel } from '@label4d/core';
 
 const ROW_HEIGHT = 22;
 const LABEL_WIDTH = 132;

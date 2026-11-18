@@ -1,5 +1,5 @@
 import { MousePointer2, Box, Spline, Pentagon, ScanLine, Ruler, Keyboard, Undo2, Redo2 } from 'lucide-react';
-import type { ToolId } from '@labelfaster/core';
+import type { ToolId } from '@label4d/core';
 import { useSession, useSessionTick } from '../session/SessionProvider';
 
 export const TOOLS = [

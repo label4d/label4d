@@ -74,7 +74,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--input', required=True, type=Path)
     parser.add_argument('--potree-converter', type=Path, default=Path(os.environ.get(
-        'LABELFASTER_POTREE_CONVERTER', 'third_party/PotreeConverter/build/PotreeConverter')))
+        'LABEL4D_POTREE_CONVERTER') or os.environ.get('LABELFASTER_POTREE_CONVERTER')
+        or 'third_party/PotreeConverter/build/PotreeConverter'))
     parser.add_argument('--box-padding', type=float, default=.2)
     args = parser.parse_args()
     print(json.dumps(build(args.input, args.potree_converter, args.box_padding), indent=2))

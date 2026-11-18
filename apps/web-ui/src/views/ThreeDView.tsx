@@ -12,7 +12,7 @@ import {
   TrackInstanceRenderer,
   WorldCloudOverlay,
   vec3,
-} from '@labelfaster/core';
+} from '@label4d/core';
 import { useSession } from '../session/SessionProvider';
 
 /** Perspective 3D view: streaming point cloud + instanced track boxes + badges. */

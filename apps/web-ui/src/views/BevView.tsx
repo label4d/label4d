@@ -9,8 +9,8 @@ import {
   rayGround,
   rayOBB,
   vec3,
-} from '@labelfaster/core';
-import type { ToolContext } from '@labelfaster/core';
+} from '@label4d/core';
+import type { ToolContext } from '@label4d/core';
 import { useSession } from '../session/SessionProvider';
 
 function loadImage(url: string): Promise<ImageBitmap | HTMLImageElement> {

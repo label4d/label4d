@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://labelfaster.local/schemas/manifest.v2.schema.json",
-  "title": "Labelfaster DatasetManifest v2",
+  "$id": "https://label4d.local/schemas/manifest.v2.schema.json",
+  "title": "Label4D DatasetManifest v2",
   "type": "object",
   "required": ["formatVersion", "datasetId", "datasetVersion", "contentHash", "referenceFrames", "pose", "sensors"],
   "additionalProperties": false,

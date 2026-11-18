@@ -94,7 +94,7 @@ reference-report.json         独立参考检查成功后生成
 
 相机默认使用源 2D 投影框；官方像素索引只用于原始点，不能拿来投影修改后的框。当前没有滚动快门计算重投影或完整姿态编辑。架构边界与预算见 [架构文档](architecture.md)。
 
-可重复检查：`pnpm test`、`pnpm lint`、`pnpm build` 和 `pnpm --filter @labelfaster/web-ui exec playwright test --workers=2`。`normalized-source.spec.ts` 在真实 20/198 帧资产存在时检查首帧、中间帧、末帧的点数、实际观测、完整姿态、照片与采样时间，以及五相机切换、实际绘制的官方点像素、播放和视图重新挂载；缺少资产会明确跳过。SDK 数值覆盖仍以上表为准，浏览器采样验证不代表逐帧全像素或生产规模性能验收。
+可重复检查：`pnpm test`、`pnpm lint`、`pnpm build` 和 `pnpm --filter @label4d/web-ui exec playwright test --workers=2`。`normalized-source.spec.ts` 在真实 20/198 帧资产存在时检查首帧、中间帧、末帧的点数、实际观测、完整姿态、照片与采样时间，以及五相机切换、实际绘制的官方点像素、播放和视图重新挂载；缺少资产会明确跳过。SDK 数值覆盖仍以上表为准，浏览器采样验证不代表逐帧全像素或生产规模性能验收。
 
 本次实现检查：106 个核心测试与 15 个浏览器测试通过，真实 20/198 帧资源均存在，未跳过 Waymo/KITTI 浏览器覆盖。已视觉检查 3D、BEV 与照片叠加；`pnpm lint`、`pnpm build` 通过。构建仍有 bundle 大小提示，主线程解码与生产规模性能留在路线图。
 

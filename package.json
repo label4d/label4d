@@ -1,24 +1,24 @@
 {
-  "name": "labelfaster",
+  "name": "label4d",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/k7/labelfaster.git"
+    "url": "git+https://github.com/k7/label4d.git"
   },
-  "homepage": "https://github.com/k7/labelfaster#readme",
+  "homepage": "https://github.com/k7/label4d#readme",
   "bugs": {
-    "url": "https://github.com/k7/labelfaster/issues"
+    "url": "https://github.com/k7/label4d/issues"
   },
   "packageManager": "pnpm@8.15.0",
   "scripts": {
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "dev": "pnpm --filter @labelfaster/web-ui dev",
+    "dev": "pnpm --filter @label4d/web-ui dev",
     "verify:preflight": "node scripts/verify-preflight.mjs",
-    "verify:domain": "pnpm --filter @labelfaster/core test",
+    "verify:domain": "pnpm --filter @label4d/core test",
     "fixtures:s-mini": "node scripts/fixtures/make-s-mini.mjs",
     "fixtures:camera-preview": "node scripts/fixtures/prepare-camera-preview.mjs",
     "fixtures:validate": "uv run --project tools/py python tools/py/validate_manifest.py fixtures/schemas/manifest.v2.schema.json fixtures/s-mini/manifest.json fixtures/r-mini/manifest.json",

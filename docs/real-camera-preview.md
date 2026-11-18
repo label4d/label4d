@@ -1,6 +1,6 @@
 # KITTI 相机、4D 点云与静态地图对齐
 
-执行 `pnpm fixtures:camera-preview`，打开 `/?manifest=/kitti-camera/manifest.json`（或顶部选择 KITTI）。首次运行按官方 ZIP 字节范围获取 tracking 0011 前 200 帧，下载缓存不入 Git。需 Python、uv 和已构建的 PotreeConverter；见 `third_party/POTREE_BUILD.md`，也可设置 `LABELFASTER_POTREE_CONVERTER`。
+执行 `pnpm fixtures:camera-preview`，打开 `/?manifest=/kitti-camera/manifest.json`（或顶部选择 KITTI）。首次运行按官方 ZIP 字节范围获取 tracking 0011 前 200 帧，下载缓存不入 Git。需 Python、uv 和已构建的 PotreeConverter；见 `third_party/POTREE_BUILD.md`，也可设置 `LABEL4D_POTREE_CONVERTER`。
 
 从零下载和完整命令见 [数据复现指南](data-reproduction.md)。
 
@@ -30,8 +30,8 @@
 ```sh
 pnpm test:tools
 pnpm test
-pnpm --filter @labelfaster/web-ui exec playwright install chromium
-pnpm --filter @labelfaster/web-ui exec playwright test --workers=2
+pnpm --filter @label4d/web-ui exec playwright install chromium
+pnpm --filter @label4d/web-ui exec playwright test --workers=2
 ```
 
 浏览器测试启动独立的 4173 测试服务，该端口须空闲。缺少生成资源时真实数据用例会跳过；必须检查测试报告，不能把合成测试样本通过当作真实对齐证明。

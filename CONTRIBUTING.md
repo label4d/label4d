@@ -28,8 +28,8 @@ pnpm lint
 pnpm test
 pnpm test:tools
 pnpm build
-pnpm --filter @labelfaster/web-ui exec playwright install chromium
-pnpm --filter @labelfaster/web-ui exec playwright test --workers=2
+pnpm --filter @label4d/web-ui exec playwright install chromium
+pnpm --filter @label4d/web-ui exec playwright test --workers=2
 ```
 
 Run checks relevant to the change and state which were run. Playwright owns port 4173. Real KITTI tests require locally generated assets; report skips instead of claiming real-data coverage. For dataset changes, follow the [tool guide](tools/README.md) and [KITTI verification guide](docs/real-camera-preview.md).

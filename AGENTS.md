@@ -39,7 +39,7 @@ Use pnpm 8.15.0 and the committed lockfile. Run Python through `uv run --project
 | Import, geometry conversion or rasterization | `pnpm test:tools`; regenerate affected data and run independent real-data checks when available |
 | Documentation | Check local links, file paths, commands and Mermaid syntax; do not run unrelated suites just for prose |
 
-Browser tests run with `pnpm --filter @labelfaster/web-ui exec playwright test --workers=2` and own port 4173. Install Chromium with the corresponding Playwright command if needed. Tests can skip missing real assets; disclose skipped coverage. `pnpm verify:preflight` validates historical fixture schemas/checksums, not real recording alignment or full release readiness.
+Browser tests run with `pnpm --filter @label4d/web-ui exec playwright test --workers=2` and own port 4173. Install Chromium with the corresponding Playwright command if needed. Tests can skip missing real assets; disclose skipped coverage. `pnpm verify:preflight` validates historical fixture schemas/checksums, not real recording alignment or full release readiness.
 
 Prefer a regression that fails for the reported bug over a test that merely reproduces the implementation. Keep browser test probes read-only and confined to test mode. Update documentation when behavior or commands change.
 

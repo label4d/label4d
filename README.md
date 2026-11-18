@@ -1,11 +1,11 @@
-# Labelfaster
+# Label4D
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![CI](https://github.com/k7/labelfaster/actions/workflows/ci.yml/badge.svg)](https://github.com/k7/labelfaster/actions/workflows/ci.yml)
+[![CI](https://github.com/k7/label4d/actions/workflows/ci.yml/badge.svg)](https://github.com/k7/label4d/actions/workflows/ci.yml)
 
 A browser-based workspace for annotating 4D point-cloud sequences with synchronized camera views.
 
-Labelfaster combines a React/Three.js editor, a TypeScript annotation engine, and Python data tools. It runs locally with static datasets and saves annotation documents in the browser.
+Label4D combines a React/Three.js editor, a TypeScript annotation engine, and Python data tools. It runs locally with static datasets and saves annotation documents in the browser.
 
 ## What works today
 
@@ -38,7 +38,7 @@ For a production build:
 
 ```sh
 pnpm build
-pnpm --filter @labelfaster/web-ui preview
+pnpm --filter @label4d/web-ui preview
 ```
 
 The output is `apps/web-ui/dist`. Serve it over HTTP; `file://` does not provide the required loading and browser-storage environment.
@@ -89,8 +89,8 @@ pnpm lint
 pnpm test
 pnpm test:tools
 pnpm build
-pnpm --filter @labelfaster/web-ui exec playwright install chromium
-pnpm --filter @labelfaster/web-ui exec playwright test --workers=2
+pnpm --filter @label4d/web-ui exec playwright install chromium
+pnpm --filter @label4d/web-ui exec playwright test --workers=2
 ```
 
 Playwright starts its own test server on port **4173**, which must be free. Real-data tests skip when their generated assets are absent; a passing editor fixture test run does not establish real-data alignment. Python tool tests include a small, generated input independent of the real preview.
@@ -109,10 +109,10 @@ Annotation saves are local to the browser profile and origin. Export snapshots f
 
 ## License
 
-Labelfaster is licensed under the [MIT License](LICENSE).
+Label4D is licensed under the [MIT License](LICENSE).
 
 ```
-Copyright (c) 2026 The Labelfaster Authors
+Copyright (c) 2026 The Label4D Authors
 ```
 
 [NOTICE](NOTICE) records the third-party components this repository references

@@ -76,7 +76,7 @@ test -x third_party/PotreeConverter/build/PotreeConverter
 git -C third_party/PotreeConverter rev-parse HEAD
 ```
 
-工具默认使用上述二进制位置；其他位置可设置 `LABELFASTER_POTREE_CONVERTER` 或传 `--potree-converter`。正式输出使用 **UNCOMPRESSED** 编码，浏览器不支持其他编码。构建指南现固定本地真实样本使用的上游 commit `a70ef212198b0e5ae1d071713a0c8cbda8fcc9a7`；第三方源码和二进制不入库，复现实验仍应记录 commit、补丁和编译环境。
+工具默认使用上述二进制位置；其他位置可设置 `LABEL4D_POTREE_CONVERTER`（旧名 `LABELFASTER_POTREE_CONVERTER` 仍会读取）或传 `--potree-converter`。正式输出使用 **UNCOMPRESSED** 编码，浏览器不支持其他编码。构建指南现固定本地真实样本使用的上游 commit `a70ef212198b0e5ae1d071713a0c8cbda8fcc9a7`；第三方源码和二进制不入库，复现实验仍应记录 commit、补丁和编译环境。
 
 ## 3. KITTI：下载并复现默认 200 帧
 
@@ -362,8 +362,8 @@ curl -I -H 'Range: bytes=0-255' \
 期望 `206 Partial Content` 和对应 `Content-Range`。返回 HTML 通常是路径错误或 Vite 的页面回退，不是点云资源。
 
 ```sh
-pnpm --filter @labelfaster/web-ui exec playwright install chromium
-pnpm --filter @labelfaster/web-ui exec playwright test \
+pnpm --filter @label4d/web-ui exec playwright install chromium
+pnpm --filter @label4d/web-ui exec playwright test \
   real-camera.spec.ts real-bev.spec.ts normalized-source.spec.ts \
   dataset-switch.spec.ts --workers=2
 ```

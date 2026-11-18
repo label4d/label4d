@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Box, ChevronDown, ChevronUp, Eye, EyeOff, Search, Spline, X } from 'lucide-react';
 import { useSession, useSessionTick } from '../session/SessionProvider';
 import { usePreference } from '../components/usePreference';
-import { colorForLabel } from '@labelfaster/core';
+import { colorForLabel } from '@label4d/core';
 
 export function ObjectList() {
   const session = useSession();

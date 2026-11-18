@@ -17,7 +17,7 @@ importers:
 
   apps/web-ui:
     dependencies:
-      '@labelfaster/core':
+      '@label4d/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@radix-ui/react-icons':

@@ -23,7 +23,7 @@ cmake --build third_party/PotreeConverter/build --parallel 8
 
 上述步骤用于新的 clone；已有 checkout 时先检查本地修改和是否已经应用补丁，避免覆盖修改或重复应用。固定 commit 便于复现，但不保证不同编译器/平台输出逐字节相同。
 
-导入器默认查找 `third_party/PotreeConverter/build/PotreeConverter`。也可传 `--potree-converter /path/to/PotreeConverter` 或设置 `LABELFASTER_POTREE_CONVERTER`。
+导入器默认查找 `third_party/PotreeConverter/build/PotreeConverter`。也可传 `--potree-converter /path/to/PotreeConverter` 或设置 `LABEL4D_POTREE_CONVERTER`（旧名 `LABELFASTER_POTREE_CONVERTER` 仍会读取）。
 
 [Apple 补丁](PotreeConverter-apple.patch) 提供 Apple 文件 seek、内存/CPU 查询分支和缺失的标准库并行算法回退，同时增加 LAS 打开失败诊断。补丁按既有上游源码制作；上游更新后若无法应用，应检查差异，不要重复应用或忽略失败。转换器及子模块继续遵循各自上游许可证。
 

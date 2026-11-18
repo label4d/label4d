@@ -200,7 +200,10 @@ def main():
     parser.add_argument('--box-padding', type=float, default=.2)
     parser.add_argument('--bev-mpp', type=float, default=.15)
     parser.add_argument('--work-dir', type=Path, help='Dedicated intermediate directory; default: temporary directory')
-    parser.add_argument('--potree-converter', type=Path, default=Path(os.environ.get('LABELFASTER_POTREE_CONVERTER', ROOT / 'third_party/PotreeConverter/build/PotreeConverter')))
+    converter_default = Path(os.environ.get('LABEL4D_POTREE_CONVERTER')
+                             or os.environ.get('LABELFASTER_POTREE_CONVERTER')
+                             or ROOT / 'third_party/PotreeConverter/build/PotreeConverter')
+    parser.add_argument('--potree-converter', type=Path, default=converter_default)
     parser.add_argument('--skip-potree', action='store_true', help='Import current-frame clouds and BEV without a static Potree tree')
     parser.add_argument('--overwrite', action='store_true', help='Explicitly allow rebuilding generated output; browser documents are untouched')
     args = parser.parse_args()
@@ -216,7 +219,7 @@ def main():
     if args.work_dir:
         import_sequence(args, args.work_dir.resolve())
     else:
-        with tempfile.TemporaryDirectory(prefix='labelfaster-import-') as directory:
+        with tempfile.TemporaryDirectory(prefix='label4d-import-') as directory:
             import_sequence(args, Path(directory))
 
 

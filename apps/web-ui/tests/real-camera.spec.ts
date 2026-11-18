@@ -29,7 +29,7 @@ test('real camera preview loads same-frame images and survives seeking and focus
   await page.getByLabel('跳转到帧', { exact: true }).press('Enter');
   expect((await image12).status()).toBe(200);
   await expect.poll(async () => (await page.evaluate(async () => {
-    const p = (window as unknown as { __LABELFASTER_TEST__: { read: () => Promise<{ frame: { presented: number; status: string } }> } }).__LABELFASTER_TEST__;
+    const p = (window as unknown as { __LABEL4D_TEST__: { read: () => Promise<{ frame: { presented: number; status: string } }> } }).__LABEL4D_TEST__;
     return (await p.read()).frame;
   }))).toEqual({ requested: 12, presented: 12, status: 'ready' });
   await page.getByRole('button', { name: '专注主视图', exact: true }).click();
@@ -43,7 +43,7 @@ test('real camera preview loads same-frame images and survives seeking and focus
   await page.getByLabel('跳转到帧', { exact: true }).fill('100');
   await page.getByLabel('跳转到帧', { exact: true }).press('Enter');
   await expect.poll(async () => (await page.evaluate(async () => {
-    const p = (window as unknown as { __LABELFASTER_TEST__: { read: () => Promise<{ frame: { presented: number; status: string } }> } }).__LABELFASTER_TEST__;
+    const p = (window as unknown as { __LABEL4D_TEST__: { read: () => Promise<{ frame: { presented: number; status: string } }> } }).__LABEL4D_TEST__;
     return (await p.read()).frame.presented;
   }))).toBe(100);
   await page.screenshot({ path: 'test-results/real-camera-frame100.png' });

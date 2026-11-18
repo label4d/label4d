@@ -20,7 +20,7 @@ class MemoryStorage implements DocumentStorage {
   fail = false;
   wait: Promise<void> = Promise.resolve();
   async open(_key: string, initial: SnapshotDocument): Promise<StoredDocument> {
-    this.document ??= { schema: 'labelfaster.local.v1', revision: 0, baseline: structuredClone(initial), edits: [] };
+    this.document ??= { schema: 'label4d.local.v1', revision: 0, baseline: structuredClone(initial), edits: [] };
     return structuredClone(this.document);
   }
   async append(edit: DurableEdit): Promise<void> {

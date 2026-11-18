@@ -431,7 +431,7 @@
   ],
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Labelfaster offline normalized sequence revision 1 (not runtime v1/v2)",
+  "title": "Label4D offline normalized sequence revision 1 (not runtime v1/v2)",
   "$defs": {
     "frame": {
       "type": "object",

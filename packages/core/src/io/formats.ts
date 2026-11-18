@@ -110,7 +110,7 @@ export function exportNuScenesAnnotations(
     scene: {
       token: sceneToken,
       name: options.sceneName ?? info.sequenceId,
-      description: `Labelfaster export ${info.sequenceId}`,
+      description: `Label4D export ${info.sequenceId}`,
       nbr_samples: samples.length,
     },
     samples,

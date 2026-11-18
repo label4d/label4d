@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { ThreeViewPanel } from '@labelfaster/core';
-import type { ThreeViewAxis } from '@labelfaster/core';
+import { ThreeViewPanel } from '@label4d/core';
+import type { ThreeViewAxis } from '@label4d/core';
 import { useSession } from '../session/SessionProvider';
 
 const AXES: ThreeViewAxis[] = ['top', 'front', 'side'];

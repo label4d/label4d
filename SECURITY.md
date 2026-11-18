@@ -2,7 +2,7 @@
 
 ## Scope
 
-Labelfaster is a local, browser-only workspace. It has no server, no account
+Label4D is a local, browser-only workspace. It has no server, no account
 system and no telemetry: datasets are loaded from the machine that serves them,
 annotation documents are stored in the browser's IndexedDB, and UI preferences
 use `localStorage`. Anything you open in the browser stays in that browser
@@ -17,7 +17,7 @@ that read local dataset files.
 Please report suspected vulnerabilities privately through GitHub Security
 Advisories rather than a public issue:
 
-https://github.com/k7/labelfaster/security/advisories/new
+https://github.com/k7/label4d/security/advisories/new
 
 If that page is unavailable, open a regular issue that describes the impact
 without a working exploit, and ask for a private channel.

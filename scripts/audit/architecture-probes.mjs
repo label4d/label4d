@@ -1,4 +1,4 @@
-/** Read-only architecture probes. Run after: pnpm --filter @labelfaster/core build.
+/** Read-only architecture probes. Run after: pnpm --filter @label4d/core build.
  * Prints observations, not acceptance-test PASS claims; makes no production edits.
  */
 import {

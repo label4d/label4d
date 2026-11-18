@@ -3,7 +3,7 @@ import { Check, CircleDashed, CloudOff, Download, FileJson, FolderOpen, Loader2,
 import { useSession, useSessionTick } from '../session/SessionProvider';
 import { BrandMark } from '../components/BrandMark';
 import { Dropdown } from '../components/Dropdown';
-import type { SnapshotDocument } from '@labelfaster/core';
+import type { SnapshotDocument } from '@label4d/core';
 
 export function Toolbar({ onToggleInspector, inspectorOpen }: { onToggleInspector: () => void; inspectorOpen: boolean }) {
   const session = useSession();
@@ -28,7 +28,7 @@ export function Toolbar({ onToggleInspector, inspectorOpen }: { onToggleInspecto
     setNotice(`已导出 ${name}`);
   };
   return <header className="app-header">
-    <div className="brand"><BrandMark /><span>Labelfaster <small>4D</small></span></div>
+    <div className="brand"><BrandMark /><span>Label4D</span></div>
     <select className="dataset-switch" aria-label="切换数据集" title={switchHint} value={selected} disabled={switchBlocked} onChange={(e) => {
       if (!canSwitchDataset() || e.target.value === selected) return;
       session.pause();

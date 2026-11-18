@@ -65,7 +65,7 @@ jobs:
           node-version: '20'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @labelfaster/web-ui exec playwright install --with-deps chromium
+      - run: pnpm --filter @label4d/web-ui exec playwright install --with-deps chromium
       # Specs that need generated KITTI/Waymo assets skip themselves when the
       # assets are absent, so this job runs the fixture-based regression set.
-      - run: pnpm --filter @labelfaster/web-ui exec playwright test --workers=2
+      - run: pnpm --filter @label4d/web-ui exec playwright test --workers=2

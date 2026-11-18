@@ -1,6 +1,6 @@
 import { test, expect, editorUrl } from './editorFixture';
 
-test.describe('Labelfaster App', () => {
+test.describe('Label4D App', () => {
   test('loads without runtime errors and renders viewports', async ({ page }) => {
     const pageErrors: Error[] = [];
     const consoleErrors: string[] = [];
@@ -16,7 +16,7 @@ test.describe('Labelfaster App', () => {
 
     await page.goto(editorUrl, { waitUntil: 'networkidle' });
 
-    await expect(page.getByText('Labelfaster 4D', { exact: true })).toHaveCount(1);
+    await expect(page.getByText('Label4D', { exact: true })).toHaveCount(1);
     const canvasLocator = page.locator('canvas');
     await expect(canvasLocator).toHaveCount(7);
 

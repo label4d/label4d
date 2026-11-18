@@ -118,7 +118,7 @@ def import_segment(source, output, frames=None, bev_mpp=.25, box_padding=.2):
                   'Point-camera pixels are source references, not projections of edited geometry.',
                   'No per-point timestamps are inferred from azimuth.',
                   'Static filtering excludes all observed 3D boxes; unlabeled moving objects may remain.']}
-    with tempfile.TemporaryDirectory(prefix='labelfaster-waymo-static-') as work_directory:
+    with tempfile.TemporaryDirectory(prefix='label4d-waymo-static-') as work_directory:
         work = Path(work_directory)
         for frame, vehicle_row in enumerate(vehicle_rows[:count]):
             timestamp = vehicle_row[TIME]

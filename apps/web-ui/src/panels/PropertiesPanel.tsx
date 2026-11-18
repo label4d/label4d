@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Box, Copy, Diamond, MousePointer2, Plus, Scissors, Trash2 } from 'lucide-react';
 import { useSession, useSessionTick } from '../session/SessionProvider';
-import type { AttributeDef, GeometryKind, KeyframeState } from '@labelfaster/core';
+import type { AttributeDef, GeometryKind, KeyframeState } from '@label4d/core';
 
 function NumberField({ label, value, step = 0.1, min, unit, onCommit }: {
   label: string; value: number; step?: number; min?: number; unit?: string; onCommit: (v: number) => void;

@@ -787,7 +787,7 @@ export class EditorSession {
     try {
       const recovered = await storage.open(this.manifest.id, this.exportSnapshot());
       if (this.disposed || epoch !== this.loadEpoch || this.storage !== storage) { storage.close(); return; }
-      if (recovered.schema !== 'labelfaster.local.v1' || recovered.baseline.sequenceId !== this.manifest.id ||
+      if (recovered.schema !== 'label4d.local.v1' || recovered.baseline.sequenceId !== this.manifest.id ||
           recovered.baseline.frameCount !== this.frameCount) throw new Error('Stored document schema or dataset does not match');
       const candidate = new TrackStore(); applySnapshot(candidate, recovered.baseline);
       const ids = new Set<string>(); let revision = 0;

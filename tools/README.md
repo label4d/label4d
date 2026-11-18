@@ -32,7 +32,7 @@ BEV 默认 `--bev-mpp 0.15`，单图最多 4096×4096，超大范围会明确报
 
 输出包括当前帧世界点云 `pcd/`、相机照片 `images/`、bbox 与轨迹 `snapshot.json`、位姿与标定 `manifest.json`、静态 `potree/`、`bev/map.png` 和来源/点数校验 `alignment-report.json`。打开 `/?manifest=/datasets/kitti-0004/manifest.json` 即可使用。`--url-prefix` 必须对应实际静态文件服务路径。
 
-PotreeConverter 构建见 [构建说明](../third_party/POTREE_BUILD.md)。可用 `--potree-converter /path/to/PotreeConverter` 或 `LABELFASTER_POTREE_CONVERTER` 指定二进制。显式指定 `--skip-potree` 时仅生成当前帧点云、标注、相机和 BEV，manifest 不会声称已有 Potree。
+PotreeConverter 构建见 [构建说明](../third_party/POTREE_BUILD.md)。可用 `--potree-converter /path/to/PotreeConverter` 或 `LABEL4D_POTREE_CONVERTER` 指定二进制（旧名 `LABELFASTER_POTREE_CONVERTER` 仍会读取）。显式指定 `--skip-potree` 时仅生成当前帧点云、标注、相机和 BEV，manifest 不会声称已有 Potree。
 
 默认使用临时目录保存静态过滤点云和 LAS，中间文件完成后释放。`--work-dir /data/import-work/0004` 可保留中间数据，须为该次导入专用。已有非空输出默认拒绝覆盖；仅重建生成数据时使用 `--overwrite`，此参数不会清除浏览器标注文档。源码与输出应位于不同目录。
 
@@ -127,7 +127,7 @@ pnpm data:potree:normalized --input apps/web-ui/public/datasets/waymo-normalized
 pnpm data:validate:normalized apps/web-ui/public/datasets/waymo-normalized-198
 ```
 
-`py/build_normalized_potree.py` 复用完整姿态框过滤、PCD → LAS 和 PotreeConverter，默认从每帧排除所有观测框内及向外 0.2 米的点，再聚合为 UNCOMPRESSED Potree。可用 `--box-padding` 调整过滤范围，`--potree-converter` 或 `LABELFASTER_POTREE_CONVERTER` 指定转换器。静态是过滤策略的名称：无标签的运动物体仍可能残留，静止但有标签的物体也会被移除。
+`py/build_normalized_potree.py` 复用完整姿态框过滤、PCD → LAS 和 PotreeConverter，默认从每帧排除所有观测框内及向外 0.2 米的点，再聚合为 UNCOMPRESSED Potree。可用 `--box-padding` 调整过滤范围，`--potree-converter` 或 `LABEL4D_POTREE_CONVERTER` 指定转换器。静态是过滤策略的名称：无标签的运动物体仍可能残留，静止但有标签的物体也会被移除。
 
 生成与校验均在临时目录完成；先发布 `potree/`，最后原子替换 `sequence.json`。转换失败不启用开关；已有 Potree 拒绝覆盖，重建应使用新的导入输出。序列身份、原始点序、相机参考像素和保存的标注保持不变。`potree/build-report.json` 记录逐帧保留/排除点数；索引绑定 metadata、hierarchy、octree 的 SHA256。离线校验检查全部文件，浏览器启动时校验 metadata，octree 继续按 HTTP Range 加载，浏览器不对整份 octree 做哈希校验。
 
