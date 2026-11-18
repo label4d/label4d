@@ -55,17 +55,27 @@ jobs:
   browser:
     name: Browser tests
     runs-on: ubuntu-latest
+    container:
+      # The image ships Chromium together with its system libraries, matching
+      # the Playwright version pinned in pnpm-lock.yaml (1.55.0). Keep the tag
+      # in sync when that dependency changes.
+      image: mcr.microsoft.com/playwright:v1.55.0-noble
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 8.15.0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: pnpm
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @label4d/web-ui exec playwright install --with-deps chromium
       # Specs that need generated KITTI/Waymo assets skip themselves when the
       # assets are absent, so this job runs the fixture-based regression set.
-      - run: pnpm --filter @label4d/web-ui exec playwright test --workers=2
+      - name: Run the browser suite
+        run: |
+          set -o pipefail
+          pnpm --filter @label4d/web-ui exec playwright test --workers=2 2>&1 | tee /tmp/playwright.log
+          status=$?
+          { echo '### Browser test log'; echo '```'; cat /tmp/playwright.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
